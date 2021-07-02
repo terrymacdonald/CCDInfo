@@ -6,9 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{9A59BDB6-C939-4954-A462-4F8D42A6D856}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>AMDInfo</RootNamespace>
-    <RootNamespace>AMDInfo</RootNamespace>
-    <AssemblyName>AMDInfo</AssemblyName>
+    <RootNamespace>CCDInfo</RootNamespace>
+    <AssemblyName>CCDInfo</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -47,7 +46,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ADL.cs" />
+    <Compile Include="CCD.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

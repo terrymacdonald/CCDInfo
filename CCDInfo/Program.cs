@@ -8,12 +8,12 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AMDInfo
+namespace CCDInfo
 {
     class Program
     {
 
-        /*public struct ADVANCED_HDR_INFO_PER_PATH
+        public struct ADVANCED_HDR_INFO_PER_PATH
         {
             public LUID AdapterId;
             public uint Id;
@@ -21,18 +21,18 @@ namespace AMDInfo
             public DISPLAYCONFIG_SDR_WHITE_LEVEL SDRWhiteLevel;
         }
 
-        public struct AMD_DISPLAY_CONFIG
+        public struct WINDOWS_DISPLAY_CONFIG
         {
             public DISPLAYCONFIG_PATH_INFO[] displayConfigPaths;
             public DISPLAYCONFIG_MODE_INFO[] displayConfigModes;
             public ADVANCED_HDR_INFO_PER_PATH[] displayHDRStates;
-        }*/
+        }
 
-        //static AMD_DISPLAY_CONFIG myDisplayConfig = new AMD_DISPLAY_CONFIG();
+        static WINDOWS_DISPLAY_CONFIG myDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"AMDInfo v1.0.0");
+            Console.WriteLine($"CCDInfo v1.0.0");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -40,7 +40,7 @@ namespace AMDInfo
             {
                 if (args[0] == "save")
                 {                    
-                    //saveToFile(args[1]);
+                    saveToFile(args[1]);
                     if (!File.Exists(args[1]))
                     {
                         Console.WriteLine($"ERROR - Couldn't save settings to the file {args[1]}");
@@ -54,42 +54,20 @@ namespace AMDInfo
                         Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to load settings from it");
                         Environment.Exit(1);
                     }
-                    //loadFromFile(args[1]);
+                    loadFromFile(args[1]);
                 }
                 else if (args[0] == "help" || args[0] == "--help" || args[0] == "-h" || args[0] == "/?" || args[0] == "-?")
                 {
-                    Console.WriteLine($"AMDInfo is a little program to help test setting display layout and HDR settings using the AMD ADL driver.\n");
+                    Console.WriteLine($"CCDInfo is a little program to help test setting display layout and HDR settings in Windows 10 64-bit.\n");
                     Console.WriteLine($"You can run it without any command line parameters, and it will print all the information it can find from the \nWindows Display CCD interface.\n");
                     Console.WriteLine($"You can also run it with 'CCDInfo save myfilename.cfg' and it will save the current display configuration into\nthe myfilename.cfg file.\n");
                     Console.WriteLine($"This is most useful when you subsequently use the 'CCDInfo load myfilename.cfg' command, as it will load the\ndisplay configuration from the myfilename.cfg file and make it live.");
                     Console.WriteLine($"In this way, you can make yourself a library of different cfg files with different display layouts, then use\nthe CCDInfo load command to swap between them.");
                     Environment.Exit(1);
                 }
-            }
+            }            
 
-            ADL_STATUS ADLRet;
-            IntPtr _adlContextHandle = IntPtr.Zero;
-
-            // Second parameter is 1: Get only the present adapters
-            ADLRet = ADLImport.ADL2_Main_Control_Create(ADLImport.ADL_Main_Memory_Alloc, (int) 1, out _adlContextHandle);
-            
-            if (ADLRet == ADL_STATUS.ADL_OK)
-            {
-                //_initialised = true;
-                Console.WriteLine($"AMDLibrary/AMDLibrary: ADL2 library was initialised successfully");
-            }
-            else
-            {
-                Console.WriteLine($"AMDLibrary/AMDLibrary: Error intialising ADL2 library. ADL2_Main_Control_Create() returned error code {ADLRet}");
-                Environment.Exit(1);
-            }
-
-            int NumberOfAdapters = 0;
-            ADLImport.ADL2_Adapter_NumberOfAdapters_Get(_adlContextHandle, ref NumberOfAdapters);
-            Console.WriteLine($"AMDLibrary/GenerateProfileDisplayIdentifiers: Number Of Adapters: {NumberOfAdapters.ToString()} ");
-
-
-            /*ADL_STATU err = ADLImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
+            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
                 throw new Win32Exception((int)err);
 
@@ -235,14 +213,11 @@ namespace AMDInfo
                 Console.WriteLine($"****** Investigating SDR White Level  *******");
                 Console.WriteLine(" SDR White Level: " + whiteLevelInfo.SDRWhiteLevel);
                 Console.WriteLine();
-            }*/
-
-            // Destroy the context handle and memory
-            ADLImport.ADL2_Main_Control_Destroy(_adlContextHandle);
+            }
 
         }
 
-        /*static void saveToFile(string filename)
+        static void saveToFile(string filename)
         {
             Console.WriteLine($"ProfileRepository/SaveProfiles: Attempting to save the profiles repository to the {filename}.");
 
@@ -427,6 +402,6 @@ namespace AMDInfo
             {
                 Console.WriteLine($"ProfileRepository/LoadProfiles: The {filename} profile JSON file exists but is empty! So we're going to treat it as if it didn't exist.");
             }
-        }*/
+        }
     }
 }
