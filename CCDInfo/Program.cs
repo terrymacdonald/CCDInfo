@@ -40,6 +40,11 @@ namespace CCDInfo
             {
                 if (args[0] == "save")
                 {                    
+                    if (args.Length != 2)
+                    {
+                        Console.WriteLine($"ERROR - You need to provide a filename in which to save display settings");
+                        Environment.Exit(1);
+                    }
                     saveToFile(args[1]);
                     if (!File.Exists(args[1]))
                     {
@@ -49,6 +54,11 @@ namespace CCDInfo
                 }
                 else if (args[0] == "load")
                 {
+                    if (args.Length != 2)
+                    {
+                        Console.WriteLine($"ERROR - You need to provide a filename from which to load display settings");
+                        Environment.Exit(1);
+                    }
                     if (!File.Exists(args[1]))
                     {
                         Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to load settings from it");
