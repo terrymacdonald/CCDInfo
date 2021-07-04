@@ -704,11 +704,11 @@ namespace CCDInfo
             { 
                 if (value)
                 {
-                    Value |= 0x1;
+                    Value = 0x1;
                 }
                 else
                 {
-                    Value = (uint) ((int)Value & ~0x1);
+                    Value = 0x0;
                 }
             }
         }
