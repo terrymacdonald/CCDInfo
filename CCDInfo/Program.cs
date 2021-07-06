@@ -52,7 +52,7 @@ namespace CCDInfo
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"CCDInfo v1.0.2");
+            Console.WriteLine($"CCDInfo v1.0.3");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -434,8 +434,6 @@ namespace CCDInfo
                     if (paths.SequenceEqual(myDisplayConfig.displayConfigPaths) && modes.SequenceEqual(myDisplayConfig.displayConfigModes))
                     {
                         Console.WriteLine($"We have already applied this display config! No need to implement it again. Exiting.");
-                        Console.WriteLine($"Saved DisplayConfig Modes = {myDisplayConfig.displayConfigModes.ToString()}");
-                        Console.WriteLine($"Current Modes = {modes}");
                         Environment.Exit(0);
                     }
                     else
