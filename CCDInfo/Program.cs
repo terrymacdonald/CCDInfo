@@ -13,26 +13,46 @@ namespace CCDInfo
     class Program
     {
 
-        public struct ADVANCED_HDR_INFO_PER_PATH
+        public struct ADVANCED_HDR_INFO_PER_PATH : IEquatable<ADVANCED_HDR_INFO_PER_PATH>
         {
             public LUID AdapterId;
             public uint Id;
             public DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO AdvancedColorInfo;
             public DISPLAYCONFIG_SDR_WHITE_LEVEL SDRWhiteLevel;
+
+            public bool Equals(ADVANCED_HDR_INFO_PER_PATH other)
+            => AdapterId.Equals(other.AdapterId) &&
+                Id == other.Id &&
+               AdvancedColorInfo.Equals(other.AdvancedColorInfo) &&
+               SDRWhiteLevel.Equals(other.SDRWhiteLevel);
+            public override int GetHashCode()
+            {
+                return (AdapterId, Id, AdvancedColorInfo, SDRWhiteLevel).GetHashCode();
+            }
         }
 
-        public struct WINDOWS_DISPLAY_CONFIG
+        public struct WINDOWS_DISPLAY_CONFIG : IEquatable<WINDOWS_DISPLAY_CONFIG>
         {
             public DISPLAYCONFIG_PATH_INFO[] displayConfigPaths;
             public DISPLAYCONFIG_MODE_INFO[] displayConfigModes;
             public ADVANCED_HDR_INFO_PER_PATH[] displayHDRStates;
+
+            public bool Equals(WINDOWS_DISPLAY_CONFIG other)
+            => displayConfigPaths.SequenceEqual(other.displayConfigPaths) &&
+               displayConfigModes.SequenceEqual(other.displayConfigModes) &&
+               displayHDRStates.SequenceEqual(other.displayHDRStates);
+
+            public override int GetHashCode()
+            {
+                return (displayConfigPaths, displayConfigModes, displayHDRStates).GetHashCode();
+            }
         }
 
         static WINDOWS_DISPLAY_CONFIG myDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"CCDInfo v1.0.1");
+            Console.WriteLine($"CCDInfo v1.0.2");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -79,13 +99,19 @@ namespace CCDInfo
 
             WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
-                throw new Win32Exception((int)err);
+            {
+                Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                Environment.Exit(1);
+            }
 
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
             err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
             if (err != WIN32STATUS.ERROR_SUCCESS)
-                throw new Win32Exception((int)err);
+            {
+                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all avilable displays");
+                Environment.Exit(1);
+            }
 
             foreach (var path in paths)
             {
@@ -99,7 +125,10 @@ namespace CCDInfo
                 sourceInfo.Header.Id = path.SourceInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the source info for source adapter #{path.SourceInfo.AdapterId}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Display Source {sourceInfo.ViewGdiDeviceName} *******");
                 Console.WriteLine();
@@ -112,7 +141,10 @@ namespace CCDInfo
                 targetInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref targetInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Display Target {targetInfo.MonitorFriendlyDeviceName} *******");
                 Console.WriteLine(" Connector Instance: " + targetInfo.ConnectorInstance);
@@ -134,7 +166,10 @@ namespace CCDInfo
                 adapterInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the adapter name for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Adapter {adapterInfo.AdapterDevicePath} *******");
                 Console.WriteLine();
@@ -148,7 +183,10 @@ namespace CCDInfo
                 targetPreferredInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref targetPreferredInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the preferred target name for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Display Target Preferred Mode  *******");
                 Console.WriteLine(" Width: " + targetPreferredInfo.Width);
@@ -170,7 +208,10 @@ namespace CCDInfo
                 targetBaseTypeInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref targetBaseTypeInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target base type for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Target Base Type *******");
                 Console.WriteLine(" Base Output Technology: " + targetBaseTypeInfo.BaseOutputTechnology);
@@ -184,7 +225,10 @@ namespace CCDInfo
                 supportVirtResInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref supportVirtResInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to find out the virtual resolution support for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Target Supporting virtual resolution *******");
                 Console.WriteLine(" Virtual Resolution is Disabled: " + supportVirtResInfo.IsMonitorVirtualResolutionDisabled);
@@ -199,7 +243,10 @@ namespace CCDInfo
                 colorInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating Advanced Color Info *******");
                 Console.WriteLine(" Advanced Color Supported: " + colorInfo.AdvancedColorSupported);
@@ -218,7 +265,10 @@ namespace CCDInfo
                 whiteLevelInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 Console.WriteLine($"****** Investigating SDR White Level  *******");
                 Console.WriteLine(" SDR White Level: " + whiteLevelInfo.SDRWhiteLevel);
@@ -234,14 +284,20 @@ namespace CCDInfo
             // Get the size of the largest Active Paths and Modes arrays
             WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
-                throw new Win32Exception((int)err);
+            {
+                Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                Environment.Exit(1);
+            }
 
             // Get the Active Paths and Modes in use now
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
             err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
             if (err != WIN32STATUS.ERROR_SUCCESS)
-                throw new Win32Exception((int)err);
+            {
+                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to get the Display Configuration to save later");
+                Environment.Exit(1);
+            }
 
             // Now cycle through the paths and grab the HDR state information
             var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
@@ -256,7 +312,10 @@ namespace CCDInfo
                 colorInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
                 // get SDR white levels
                 var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
@@ -266,7 +325,10 @@ namespace CCDInfo
                 whiteLevelInfo.Header.Id = path.TargetInfo.Id;
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
-                    throw new Win32Exception((int)err);
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
 
 
                 hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
@@ -343,27 +405,50 @@ namespace CCDInfo
 
 
                 // Get the size of the largest Active Paths and Modes arrays
-                WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ALL_PATHS, out var pathCount, out var modeCount);
+                WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: ERROR while trying to get the largest active paths and modes");
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the largest active paths and modes");
                     throw new Win32Exception((int)err);
                 }
                     
                
                 // Now we want to validate the config is ok
-                if (myDisplayConfig.displayConfigPaths.Length <= pathCount - 1 &&
-                    myDisplayConfig.displayConfigModes.Length <= pathCount - 1)
+                if (myDisplayConfig.displayConfigPaths.Length <= pathCount  &&
+                    myDisplayConfig.displayConfigModes.Length <= modeCount)
                 {
                     uint myPathsCount = (uint)myDisplayConfig.displayConfigPaths.Length;
                     uint myModesCount = (uint)myDisplayConfig.displayConfigModes.Length;
+
+                    // We want to get a list of the current displays and then make sure they are the same
+                    var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+                    var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+                    err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                    if (err != WIN32STATUS.ERROR_SUCCESS)
+                    {
+                        Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all avilable displays");
+                        Environment.Exit(1);
+                    }
+
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
+                    if (paths.SequenceEqual(myDisplayConfig.displayConfigPaths) && modes.SequenceEqual(myDisplayConfig.displayConfigModes))
+                    {
+                        Console.WriteLine($"We have already applied this display config! No need to implement it again. Exiting.");
+                        Console.WriteLine($"Saved DisplayConfig Modes = {myDisplayConfig.displayConfigModes.ToString()}");
+                        Console.WriteLine($"Current Modes = {modes}");
+                        Environment.Exit(0);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"ProfileRepository/LoadProfiles: The requested display configuration is different to the one in use at present. We need to change to the new one.");
+                    }
 
                     Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid.");
                     // Test whether a specified display configuration is supported on the computer                    
                     err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.TEST_IF_VALID_DISPLAYCONFIG);
                     if (err != WIN32STATUS.ERROR_SUCCESS)
                     {
-                        Console.WriteLine($"ProfileRepository/LoadProfiles: ERROR white testing that the Display COnfiguration is valid");
+                        Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while testing that the Display Configuration is valid");
                         throw new Win32Exception((int)err);
                     }
 
@@ -372,7 +457,7 @@ namespace CCDInfo
                     err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.SET_DISPLAYCONFIG_AND_SAVE);
                     if (err != WIN32STATUS.ERROR_SUCCESS)
                     {
-                        Console.WriteLine($"ProfileRepository/LoadProfiles: ERROR while trying to set the display configuration.");
+                        Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while trying to set the display configuration");
                         throw new Win32Exception((int)err);
                     }
 
@@ -432,7 +517,7 @@ namespace CCDInfo
                         err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                         if (err != WIN32STATUS.ERROR_SUCCESS)
                         {
-                            Console.WriteLine($"ProfileRepository/LoadProfiles: ERROR while trying to get the display's current HDR configuration.");
+                            Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{myHDRstate.Id}");
                             throw new Win32Exception((int)err);
                         }
 
@@ -450,7 +535,7 @@ namespace CCDInfo
                             err = CCDImport.DisplayConfigSetDeviceInfo(ref setColorState);
                             if (err != WIN32STATUS.ERROR_SUCCESS)
                             {
-                                Console.WriteLine($"ProfileRepository/LoadProfiles: ERROR while trying to set the display's HDR configuration to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled}.");
+                                Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{myHDRstate.Id}");
                                 throw new Win32Exception((int)err);
                             }
 

@@ -419,12 +419,13 @@ namespace CCDInfo
 
         public bool Equals(DISPLAYCONFIG_PATH_SOURCE_INFO other)
             => AdapterId.Equals(other.AdapterId) &&
-                Id == other.Id &&
+                // Id == other.Id && // Removed the Id from the Equals, as it possibly changes after reboot.
                 ModeInfoIdx == other.ModeInfoIdx &&
                 StatusFlags.Equals(other.StatusFlags);
 
         public override int GetHashCode()
         {
+            //return (AdapterId, Id, ModeInfoIdx, StatusFlags).GetHashCode();
             return (AdapterId, ModeInfoIdx, StatusFlags).GetHashCode();
         }
 
@@ -495,13 +496,14 @@ namespace CCDInfo
 
         public bool Equals(DISPLAYCONFIG_MODE_INFO other)
             => InfoType == other.InfoType &&
-               Id == other.Id &&
+               // Id == other.Id && // Removed the Id from the Equals, as it possibly changes after reboot.
                AdapterId.Equals(other.AdapterId) &&
                Info.Equals(other.Info);
 
         public override int GetHashCode()
         {
-            return (InfoType, Id, AdapterId, Info).GetHashCode();
+            //return (InfoType, Id, AdapterId, Info).GetHashCode();
+            return (InfoType, AdapterId, Info).GetHashCode();
         }
 
         //public override string ToString() => $"{type.ToString("G")}";
