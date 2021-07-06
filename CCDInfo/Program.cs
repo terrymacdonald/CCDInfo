@@ -443,18 +443,18 @@ namespace CCDInfo
                         Console.WriteLine($"ProfileRepository/LoadProfiles: The requested display configuration is different to the one in use at present. We need to change to the new one.");
                     }
 
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid.");
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
                     // Test whether a specified display configuration is supported on the computer                    
-                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.TEST_IF_VALID_DISPLAYCONFIG);
+                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.TEST_IF_VALID_DISPLAYCONFIG_WITH_TWEAKS);
                     if (err != WIN32STATUS.ERROR_SUCCESS)
                     {
                         Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while testing that the Display Configuration is valid");
                         throw new Win32Exception((int)err);
                     }
 
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: Yay! The display configuration is valid!");
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Yay! The display configuration is valid! Attempting to set the Display Config (with Tweaks)");
                     // Now set the specified display configuration for this computer                    
-                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.SET_DISPLAYCONFIG_AND_SAVE);
+                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.SET_DISPLAYCONFIG_WITH_TWEAKS_AND_SAVE);
                     if (err != WIN32STATUS.ERROR_SUCCESS)
                     {
                         Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while trying to set the display configuration");
