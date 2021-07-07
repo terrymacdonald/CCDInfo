@@ -21,7 +21,7 @@ namespace CCDInfo
             public DISPLAYCONFIG_SDR_WHITE_LEVEL SDRWhiteLevel;
 
             public bool Equals(ADVANCED_HDR_INFO_PER_PATH other)
-            => AdapterId.Equals(other.AdapterId) &&
+            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
                 Id == other.Id &&
                AdvancedColorInfo.Equals(other.AdvancedColorInfo) &&
                SDRWhiteLevel.Equals(other.SDRWhiteLevel);
@@ -52,7 +52,7 @@ namespace CCDInfo
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"CCDInfo v1.0.3");
+            Console.WriteLine($"CCDInfo v1.0.4");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -277,9 +277,52 @@ namespace CCDInfo
 
         }
 
-        static void saveToFile(string filename)
+        static void updateAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, ref WINDOWS_DISPLAY_CONFIG currentDisplayConfig)
         {
-            Console.WriteLine($"ProfileRepository/SaveProfiles: Attempting to save the profiles repository to the {filename}.");
+            // Update the paths with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayConfigPaths.Length; i++)
+            {
+                DISPLAYCONFIG_PATH_INFO savedPath = savedDisplayConfig.displayConfigPaths[i];
+                var matchingCurrentPaths = currentDisplayConfig.displayConfigPaths.Where(item => item.Equals(savedPath));
+                if (matchingCurrentPaths.Count() > 0)
+                {
+                    savedPath.SourceInfo.AdapterId = matchingCurrentPaths.First().SourceInfo.AdapterId;
+                    savedPath.TargetInfo.AdapterId = matchingCurrentPaths.First().TargetInfo.AdapterId;
+                    savedDisplayConfig.displayConfigPaths[i] = savedPath;
+                }
+            }
+            // Update the modes with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayConfigModes.Length; i++)
+            {
+                DISPLAYCONFIG_MODE_INFO savedMode = savedDisplayConfig.displayConfigModes[i];
+                var matchingCurrentModes = currentDisplayConfig.displayConfigModes.Where(item => item.Equals(savedMode));
+                if (matchingCurrentModes.Count() > 0)
+                {
+                    savedMode.AdapterId = matchingCurrentModes.First().AdapterId;
+                    savedDisplayConfig.displayConfigModes[i] = savedMode;
+                }
+            }
+            // Update the HDR info with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayHDRStates.Length; i++)
+            //foreach (ADVANCED_HDR_INFO_PER_PATH savedHDRInfo in savedDisplayConfig.displayHDRStates)
+            {
+                ADVANCED_HDR_INFO_PER_PATH savedHDRInfo = savedDisplayConfig.displayHDRStates[i];
+                var matchingCurrentHDRInfos = currentDisplayConfig.displayHDRStates.Where(item => item.Equals(savedHDRInfo));
+                if (matchingCurrentHDRInfos.Count() > 0)
+                {
+
+                    savedHDRInfo.AdapterId = matchingCurrentHDRInfos.First().AdapterId;
+                    savedHDRInfo.AdvancedColorInfo.Header.AdapterId = matchingCurrentHDRInfos.First().AdvancedColorInfo.Header.AdapterId;
+                    savedHDRInfo.SDRWhiteLevel.Header.AdapterId = matchingCurrentHDRInfos.First().SDRWhiteLevel.Header.AdapterId;
+                    savedDisplayConfig.displayHDRStates[i] = savedHDRInfo;
+                }
+            }
+            //return savedDisplayConfig;
+        }
+
+        static WINDOWS_DISPLAY_CONFIG getCurrentWindowsDisplayConfig()
+        {
+            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
 
             // Get the size of the largest Active Paths and Modes arrays
             WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
@@ -341,10 +384,19 @@ namespace CCDInfo
 
 
             // Store the active paths and modes in our display config object
-            myDisplayConfig.displayConfigPaths = paths;
-            myDisplayConfig.displayConfigModes = modes;
-            myDisplayConfig.displayHDRStates = hdrInfos;
+            windowsDisplayConfig.displayConfigPaths = paths;
+            windowsDisplayConfig.displayConfigModes = modes;
+            windowsDisplayConfig.displayHDRStates = hdrInfos;
 
+            return windowsDisplayConfig;
+        }
+
+
+        static void saveToFile(string filename)
+        {
+            Console.WriteLine($"ProfileRepository/SaveProfiles: Attempting to save the profiles repository to the {filename}.");
+
+            myDisplayConfig = getCurrentWindowsDisplayConfig();
 
             // Save the object to file!
             try
@@ -403,153 +455,130 @@ namespace CCDInfo
                     Console.WriteLine($"ProfileRepository/LoadProfiles: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
 
+                // Get the current windows display config
+                WINDOWS_DISPLAY_CONFIG currentWindowsDisplayConfig = getCurrentWindowsDisplayConfig();
+                
+                // Check whether the display config is in use now
+                Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
+                if (myDisplayConfig.Equals(currentWindowsDisplayConfig))
+                {
+                    Console.WriteLine($"We have already applied this display config! No need to implement it again. Exiting.");
+                    Environment.Exit(0);
+                }
 
-                // Get the size of the largest Active Paths and Modes arrays
-                WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
+                Console.WriteLine($"ProfileRepository/LoadProfiles: The requested display configuration is different to the one in use at present. We need to change to the new one.");
+
+                // Now we go through the Paths to update the LUIDs as per Soroush's suggestion
+                updateAdapterIDs(ref myDisplayConfig, ref currentWindowsDisplayConfig);
+
+                Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
+                // Test whether a specified display configuration is supported on the computer                    
+                uint myPathsCount = (uint)myDisplayConfig.displayConfigPaths.Length;
+                uint myModesCount = (uint)myDisplayConfig.displayConfigModes.Length;
+                //WIN32STATUS err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.TEST_IF_VALID_DISPLAYCONFIG);
+                WIN32STATUS err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.DISPLAYMAGICIAN_VALIDATE);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the largest active paths and modes");
+                    Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while testing that the Display Configuration is valid");
                     throw new Win32Exception((int)err);
                 }
-                    
-               
-                // Now we want to validate the config is ok
-                if (myDisplayConfig.displayConfigPaths.Length <= pathCount  &&
-                    myDisplayConfig.displayConfigModes.Length <= modeCount)
-                {
-                    uint myPathsCount = (uint)myDisplayConfig.displayConfigPaths.Length;
-                    uint myModesCount = (uint)myDisplayConfig.displayConfigModes.Length;
 
-                    // We want to get a list of the current displays and then make sure they are the same
-                    var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-                    var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-                    err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                Console.WriteLine($"ProfileRepository/LoadProfiles: Yay! The display configuration is valid! Attempting to set the Display Config (with Tweaks)");
+                // Now set the specified display configuration for this computer                    
+                err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.DISPLAYMAGICIAN_SET);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while trying to set the display configuration");
+                    throw new Win32Exception((int)err);
+                }
+
+                Console.WriteLine($"ProfileRepository/LoadProfiles: The display configuration has been successfully applied");
+
+                /*// Get the Active Paths and Modes in use now
+                var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+                var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+                err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                    throw new Win32Exception((int)err);
+
+                // Now cycle through the paths and grab the HDR state information
+                var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
+                int hdrInfoCount = 0;
+                foreach (var path in paths)
+                {
+                    // Get advanced HDR info
+                    var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
+                    colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+                    colorInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
+                    colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                    colorInfo.Header.Id = path.TargetInfo.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
+                    if (err != WIN32STATUS.ERROR_SUCCESS)
+                        throw new Win32Exception((int)err);
+
+                    // get SDR white levels
+                    var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
+                    whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+                    whiteLevelInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
+                    whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                    whiteLevelInfo.Header.Id = path.TargetInfo.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
+                    if (err != WIN32STATUS.ERROR_SUCCESS)
+                        throw new Win32Exception((int)err);
+
+
+                    hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
+                    hdrInfos[hdrInfoCount].AdapterId = path.TargetInfo.AdapterId;
+                    hdrInfos[hdrInfoCount].Id = path.TargetInfo.Id;
+                    hdrInfos[hdrInfoCount].AdvancedColorInfo = colorInfo;
+                    hdrInfos[hdrInfoCount].SDRWhiteLevel = whiteLevelInfo;
+                    hdrInfoCount++;
+                }*/
+
+
+                foreach (ADVANCED_HDR_INFO_PER_PATH myHDRstate in myDisplayConfig.displayHDRStates)
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Trying to get information whether HDR color is in use now on Display {myHDRstate.Id}.");
+                    // Get advanced HDR info
+                    var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
+                    colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+                    colorInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
+                    colorInfo.Header.AdapterId = myHDRstate.AdapterId;
+                    colorInfo.Header.Id = myHDRstate.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                     if (err != WIN32STATUS.ERROR_SUCCESS)
                     {
-                        Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all avilable displays");
-                        Environment.Exit(1);
+                        Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{myHDRstate.Id}");
+                        throw new Win32Exception((int)err);
                     }
 
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
-                    if (paths.SequenceEqual(myDisplayConfig.displayConfigPaths) && modes.SequenceEqual(myDisplayConfig.displayConfigModes))
+                    if (myHDRstate.AdvancedColorInfo.AdvancedColorSupported && colorInfo.AdvancedColorEnabled != myHDRstate.AdvancedColorInfo.AdvancedColorEnabled)
                     {
-                        Console.WriteLine($"We have already applied this display config! No need to implement it again. Exiting.");
-                        Environment.Exit(0);
+                        Console.WriteLine($"ProfileRepository/LoadProfiles: HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} but is currently {colorInfo.AdvancedColorEnabled}.");
+
+                        var setColorState = new DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE();
+                        setColorState.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+                        setColorState.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>();
+                        setColorState.Header.AdapterId = myHDRstate.AdapterId;
+                        setColorState.Header.Id = myHDRstate.Id;
+                        setColorState.EnableAdvancedColor = myHDRstate.AdvancedColorInfo.AdvancedColorEnabled;
+
+                        err = CCDImport.DisplayConfigSetDeviceInfo(ref setColorState);
+                        if (err != WIN32STATUS.ERROR_SUCCESS)
+                        {
+                            Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{myHDRstate.Id}");
+                            throw new Win32Exception((int)err);
+                        }
+
+                        Console.WriteLine($"ProfileRepository/LoadProfiles: HDR successfully set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} on Display {myHDRstate.Id}");
                     }
                     else
                     {
-                        Console.WriteLine($"ProfileRepository/LoadProfiles: The requested display configuration is different to the one in use at present. We need to change to the new one.");
+                        Console.WriteLine($"ProfileRepository/LoadProfiles: Skipping setting HDR on Display {myHDRstate.Id} as it does not support HDR");
                     }
 
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
-                    // Test whether a specified display configuration is supported on the computer                    
-                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.TEST_IF_VALID_DISPLAYCONFIG_WITH_TWEAKS);
-                    if (err != WIN32STATUS.ERROR_SUCCESS)
-                    {
-                        Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while testing that the Display Configuration is valid");
-                        throw new Win32Exception((int)err);
-                    }
-
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: Yay! The display configuration is valid! Attempting to set the Display Config (with Tweaks)");
-                    // Now set the specified display configuration for this computer                    
-                    err = CCDImport.SetDisplayConfig(myPathsCount, myDisplayConfig.displayConfigPaths, myModesCount, myDisplayConfig.displayConfigModes, SDC.SET_DISPLAYCONFIG_WITH_TWEAKS_AND_SAVE);
-                    if (err != WIN32STATUS.ERROR_SUCCESS)
-                    {
-                        Console.WriteLine($"ERROR - SetDisplayConfig returned WIN32STATUS {err} while trying to set the display configuration");
-                        throw new Win32Exception((int)err);
-                    }
-
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: The display configuration has been successfully applied");
-
-                    /*// Get the Active Paths and Modes in use now
-                    var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-                    var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-                    err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-                    if (err != WIN32STATUS.ERROR_SUCCESS)
-                        throw new Win32Exception((int)err);
-
-                    // Now cycle through the paths and grab the HDR state information
-                    var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-                    int hdrInfoCount = 0;
-                    foreach (var path in paths)
-                    {
-                        // Get advanced HDR info
-                        var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                        colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                        colorInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                        colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                        colorInfo.Header.Id = path.TargetInfo.Id;
-                        err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                        if (err != WIN32STATUS.ERROR_SUCCESS)
-                            throw new Win32Exception((int)err);
-
-                        // get SDR white levels
-                        var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
-                        whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-                        whiteLevelInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
-                        whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                        whiteLevelInfo.Header.Id = path.TargetInfo.Id;
-                        err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
-                        if (err != WIN32STATUS.ERROR_SUCCESS)
-                            throw new Win32Exception((int)err);
-
-
-                        hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
-                        hdrInfos[hdrInfoCount].AdapterId = path.TargetInfo.AdapterId;
-                        hdrInfos[hdrInfoCount].Id = path.TargetInfo.Id;
-                        hdrInfos[hdrInfoCount].AdvancedColorInfo = colorInfo;
-                        hdrInfos[hdrInfoCount].SDRWhiteLevel = whiteLevelInfo;
-                        hdrInfoCount++;
-                    }*/
-
-
-                    foreach (ADVANCED_HDR_INFO_PER_PATH myHDRstate in myDisplayConfig.displayHDRStates)
-                    {
-                        Console.WriteLine($"ProfileRepository/LoadProfiles: Trying to get information whether HDR color is in use now on Display {myHDRstate.Id}.");
-                        // Get advanced HDR info
-                        var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                        colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                        colorInfo.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                        colorInfo.Header.AdapterId = myHDRstate.AdapterId;
-                        colorInfo.Header.Id = myHDRstate.Id;
-                        err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                        if (err != WIN32STATUS.ERROR_SUCCESS)
-                        {
-                            Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{myHDRstate.Id}");
-                            throw new Win32Exception((int)err);
-                        }
-
-                        if (myHDRstate.AdvancedColorInfo.AdvancedColorSupported && colorInfo.AdvancedColorEnabled != myHDRstate.AdvancedColorInfo.AdvancedColorEnabled)
-                        {
-                            Console.WriteLine($"ProfileRepository/LoadProfiles: HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} but is currently {colorInfo.AdvancedColorEnabled}.");
-
-                            var setColorState = new DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE();
-                            setColorState.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-                            setColorState.Header.Size = Marshal.SizeOf<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>();
-                            setColorState.Header.AdapterId = myHDRstate.AdapterId;
-                            setColorState.Header.Id = myHDRstate.Id;
-                            setColorState.EnableAdvancedColor = myHDRstate.AdvancedColorInfo.AdvancedColorEnabled;
-
-                            err = CCDImport.DisplayConfigSetDeviceInfo(ref setColorState);
-                            if (err != WIN32STATUS.ERROR_SUCCESS)
-                            {
-                                Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{myHDRstate.Id}");
-                                throw new Win32Exception((int)err);
-                            }
-
-                            Console.WriteLine($"ProfileRepository/LoadProfiles: HDR successfully set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} on Display {myHDRstate.Id}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"ProfileRepository/LoadProfiles: Skipping setting HDR on Display {myHDRstate.Id} as it does not support HDR");
-                        }
-
-                    }
                 }
-                else
-                {
-                    Console.WriteLine($"ProfileRepository/LoadProfiles: The number of Display Paths or Display Modes is higher than the max count allowed ({pathCount} for Paths and {modeCount} for Modes).");
-                }
+                
 
             }
             else

@@ -144,6 +144,11 @@ namespace CCDInfo
         TEST_IF_VALID_DISPLAYCONFIG_WITH_TWEAKS = (SDC_VALIDATE | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES),
         SET_DISPLAYCONFIG_AND_SAVE = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
         SET_DISPLAYCONFIG_WITH_TWEAKS_AND_SAVE = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE),
+        DISPLAYMAGICIAN_SET = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
+        DISPLAYMAGICIAN_VALIDATE = (SDC_VALIDATE | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
+        //DISPLAYMAGICIAN_SET = (SDC_APPLY | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_CHANGES | SDC_ALLOW_PATH_ORDER_CHANGES ),
+        //DISPLAYMAGICIAN_VALIDATE = (SDC_VALIDATE | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_CHANGES | SDC_ALLOW_PATH_ORDER_CHANGES ),
+
         SET_DISPLAYCONFIG_BUT_NOT_SAVE = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG),
         TEST_IF_CLONE_VALID = (SDC_VALIDATE | SDC_TOPOLOGY_CLONE),
         SET_CLONE_TOPOLOGY = (SDC_APPLY | SDC_TOPOLOGY_CLONE),
@@ -188,7 +193,7 @@ namespace CCDInfo
         public bool Equals(DISPLAYCONFIG_DEVICE_INFO_HEADER other)
             => Type == other.Type &&
                 Size == other.Size &&
-                AdapterId.Equals(other.AdapterId) &&
+                // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
                 Id == other.Id;
 
         public override int GetHashCode()
@@ -420,15 +425,15 @@ namespace CCDInfo
         public DISPLAYCONFIG_SOURCE_FLAGS StatusFlags;
 
         public bool Equals(DISPLAYCONFIG_PATH_SOURCE_INFO other)
-            => AdapterId.Equals(other.AdapterId) &&
-                // Id == other.Id && // Removed the Id from the Equals, as it possibly changes after reboot.
+            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
+                Id == other.Id && 
                 ModeInfoIdx == other.ModeInfoIdx &&
                 StatusFlags.Equals(other.StatusFlags);
 
         public override int GetHashCode()
         {
             //return (AdapterId, Id, ModeInfoIdx, StatusFlags).GetHashCode();
-            return (AdapterId, ModeInfoIdx, StatusFlags).GetHashCode();
+            return (ModeInfoIdx, Id, StatusFlags).GetHashCode();
         }
 
         //public override string ToString() => $"{type.ToString("G")}";
@@ -449,7 +454,7 @@ namespace CCDInfo
         public DISPLAYCONFIG_TARGET_FLAGS StatusFlags;
 
         public bool Equals(DISPLAYCONFIG_PATH_TARGET_INFO other)
-            => AdapterId.Equals(other.AdapterId) &&
+            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
                 Id == other.Id &&
                 ModeInfoIdx == other.ModeInfoIdx &&
                 OutputTechnology.Equals(other.OutputTechnology) &&
@@ -498,8 +503,8 @@ namespace CCDInfo
 
         public bool Equals(DISPLAYCONFIG_MODE_INFO other)
             => InfoType == other.InfoType &&
-               // Id == other.Id && // Removed the Id from the Equals, as it possibly changes after reboot.
-               AdapterId.Equals(other.AdapterId) &&
+               Id == other.Id && 
+               // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
                Info.Equals(other.Info);
 
         public override int GetHashCode()
