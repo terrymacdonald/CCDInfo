@@ -7,7 +7,8 @@ using System.Threading.Tasks;
 
 namespace CCDInfo
 {
-    public enum WIN32STATUS
+   
+    public enum WIN32STATUS : uint
     {
         ERROR_SUCCESS = 0,
         ERROR_ACCESS_DENIED = 5,
@@ -15,10 +16,12 @@ namespace CCDInfo
         ERROR_GEN_FAILURE = 31,
         ERROR_INVALID_PARAMETER = 87,
         ERROR_INSUFFICIENT_BUFFER = 122,
+        ERROR_BAD_CONFIGURATION = 1610,
     }
 
-    public enum DISPLAYCONFIG_DEVICE_INFO_TYPE
+    public enum DISPLAYCONFIG_DEVICE_INFO_TYPE : uint
     {
+        Zero = 0,
         DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME = 1,
         DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME = 2,
         DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE = 3,
@@ -32,7 +35,8 @@ namespace CCDInfo
         DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL = 11,
     }
 
-    public enum DISPLAYCONFIG_COLOR_ENCODING
+    [Flags]
+    public enum DISPLAYCONFIG_COLOR_ENCODING : uint
     {
         DISPLAYCONFIG_COLOR_ENCODING_RGB = 0,
         DISPLAYCONFIG_COLOR_ENCODING_YCBCR444 = 1,
@@ -41,26 +45,34 @@ namespace CCDInfo
         DISPLAYCONFIG_COLOR_ENCODING_INTENSITY = 4,
     }
 
-    public enum DISPLAYCONFIG_SCALING
+    [Flags]
+    public enum DISPLAYCONFIG_SCALING : uint
     {
+        Zero = 0, 
         DISPLAYCONFIG_SCALING_IDENTITY = 1,
         DISPLAYCONFIG_SCALING_CENTERED = 2,
         DISPLAYCONFIG_SCALING_STRETCHED = 3,
         DISPLAYCONFIG_SCALING_ASPECTRATIOCENTEREDMAX = 4,
         DISPLAYCONFIG_SCALING_CUSTOM = 5,
         DISPLAYCONFIG_SCALING_PREFERRED = 128,
+        DISPLAYCONFIG_SCALING_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_ROTATION
+    [Flags]
+    public enum DISPLAYCONFIG_ROTATION : uint
     {
+        Zero = 0, 
         DISPLAYCONFIG_ROTATION_IDENTITY = 1,
         DISPLAYCONFIG_ROTATION_ROTATE90 = 2,
         DISPLAYCONFIG_ROTATION_ROTATE180 = 3,
+        DISPLAYCONFIG_ROTATION_ROTATE270 = 4,
+        DISPLAYCONFIG_ROTATION_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY
+    [Flags]
+    public enum DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY : uint
     {
-        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER = -1,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER = 4294967295, // - 1
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HD15 = 0,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_SVIDEO = 1,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_COMPOSITE_VIDEO = 2,
@@ -78,31 +90,41 @@ namespace CCDInfo
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_MIRACAST = 15,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED = 16,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_VIRTUAL = 17,
-        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL = unchecked((int)0x80000000),
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL = 0x80000000,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_TOPOLOGY_ID
+    [Flags]
+    public enum DISPLAYCONFIG_TOPOLOGY_ID : uint
     {
+        Zero = 0x0, 
         DISPLAYCONFIG_TOPOLOGY_INTERNAL = 0x00000001,
         DISPLAYCONFIG_TOPOLOGY_CLONE = 0x00000002,
         DISPLAYCONFIG_TOPOLOGY_EXTEND = 0x00000004,
         DISPLAYCONFIG_TOPOLOGY_EXTERNAL = 0x00000008,
+        DISPLAYCONFIG_TOPOLOGY_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_PATH
+    [Flags]
+    public enum DISPLAYCONFIG_PATH : uint
     {
+        Zero = 0x0,
         DISPLAYCONFIG_PATH_ACTIVE = 0x00000001,
         DISPLAYCONFIG_PATH_PREFERRED_UNSCALED = 0x00000004,
         DISPLAYCONFIG_PATH_SUPPORT_VIRTUAL_MODE = 0x00000008,
     }
 
-    public enum DISPLAYCONFIG_SOURCE_FLAGS
+    [Flags]
+    public enum DISPLAYCONFIG_SOURCE_FLAGS : uint
     {
+        Zero = 0x0,
         DISPLAYCONFIG_SOURCE_IN_USE = 0x00000001,
     }
 
-    public enum DISPLAYCONFIG_TARGET_FLAGS
+    [Flags]
+    public enum DISPLAYCONFIG_TARGET_FLAGS : uint
     {
+        Zero = 0x0,
         DISPLAYCONFIG_TARGET_IN_USE = 0x00000001,
         DISPLAYCONFIG_TARGET_FORCIBLE = 0x00000002,
         DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_BOOT = 0x00000004,
@@ -111,8 +133,10 @@ namespace CCDInfo
         DISPLAYCONFIG_TARGET_IS_HMD = 0x00000020,
     }
 
-    public enum QDC
+    [Flags]
+    public enum QDC : uint
     {
+        Zero = 0x0,
         QDC_ALL_PATHS = 0x00000001, // Get all paths
         QDC_ONLY_ACTIVE_PATHS = 0x00000002, // Get only the active paths currently in use
         QDC_DATABASE_CURRENT = 0x00000004, // Get the currently active paths as stored in the display database
@@ -120,8 +144,10 @@ namespace CCDInfo
         QDC_INCLUDE_HMD = 0x00000020,
     }
 
-    public enum SDC
+    [Flags]
+    public enum SDC : uint
     {
+        Zero = 0x0,
         SDC_TOPOLOGY_INTERNAL = 0x00000001,
         SDC_TOPOLOGY_CLONE = 0x00000002,
         SDC_TOPOLOGY_EXTEND = 0x00000004,
@@ -157,31 +183,77 @@ namespace CCDInfo
         SET_DISPLAYCONFIG_USING_PATHS_ONLY_AND_SAVE = (SDC_APPLY | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_PATH_ORDER_CHANGES),
     }
 
-    public enum DISPLAYCONFIG_SCANLINE_ORDERING
+    [Flags]
+    public enum DISPLAYCONFIG_SCANLINE_ORDERING : uint
     {
         DISPLAYCONFIG_SCANLINE_ORDERING_UNSPECIFIED = 0,
         DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE = 1,
         DISPLAYCONFIG_SCANLINE_ORDERING_INTERLACED = 2,
         DISPLAYCONFIG_SCANLINE_ORDERING_INTERLACED_UPPERFIELDFIRST = DISPLAYCONFIG_SCANLINE_ORDERING_INTERLACED,
         DISPLAYCONFIG_SCANLINE_ORDERING_INTERLACED_LOWERFIELDFIRST = 3,
+        DISPLAYCONFIG_SCANLINE_ORDERING_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_PIXELFORMAT
+    [Flags]
+    public enum DISPLAYCONFIG_PIXELFORMAT : uint
     {
+        Zero = 0x0,
         DISPLAYCONFIG_PIXELFORMAT_8BPP = 1,
         DISPLAYCONFIG_PIXELFORMAT_16BPP = 2,
         DISPLAYCONFIG_PIXELFORMAT_24BPP = 3,
         DISPLAYCONFIG_PIXELFORMAT_32BPP = 4,
         DISPLAYCONFIG_PIXELFORMAT_NONGDI = 5,
+        DISPLAYCONFIG_PIXELFORMAT_FORCEUINT32 = 0xFFFFFFFF,
     }
 
-    public enum DISPLAYCONFIG_MODE_INFO_TYPE
+    [Flags]
+    public enum DISPLAYCONFIG_MODE_INFO_TYPE : uint
     {
+        Zero = 0x0,
         DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE = 1,
         DISPLAYCONFIG_MODE_INFO_TYPE_TARGET = 2,
         DISPLAYCONFIG_MODE_INFO_TYPE_DESKTOP_IMAGE = 3,
+        DISPLAYCONFIG_MODE_INFO_TYPE_FORCEUINT32 = 0xFFFFFFFF,
     }
-    
+
+    [Flags]
+    public enum D3D_VIDEO_SIGNAL_STANDARD : uint
+    {
+        Uninitialized = 0,
+        VesaDmt = 1,
+        VesaGtf = 2,
+        VesaCvt = 3,
+        Ibm = 4,
+        Apple = 5,
+        NtscM = 6,
+        NtscJ = 7,
+        Ntsc443 = 8,
+        PalB = 9,
+        PalB1 = 10,
+        PalG = 11,
+        PalH = 12,
+        PalI = 13,
+        PalD = 14,
+        PalN = 15,
+        PalNc = 16,
+        SecamB = 17,
+        SecamD = 18,
+        SecamG = 19,
+        SecamH = 20,
+        SecamK = 21,
+        SecamK1 = 22,
+        SecamL = 23,
+        SecamL1 = 24,
+        Eia861 = 25,
+        Eia861A = 26,
+        Eia861B = 27,
+        PalK = 28,
+        PalK1 = 29,
+        PalL = 30,
+        PalM = 31,
+        Other = 255
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_DEVICE_INFO_HEADER : IEquatable<DISPLAYCONFIG_DEVICE_INFO_HEADER>
     {
@@ -208,11 +280,11 @@ namespace CCDInfo
     public struct DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO : IEquatable<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        [MarshalAs(UnmanagedType.U4)]
+        //[MarshalAs(UnmanagedType.U4)]
         public uint Value;
         public DISPLAYCONFIG_COLOR_ENCODING ColorEncoding;
-        [MarshalAs(UnmanagedType.U4)]
-        public int BitsPerColorChannel;
+        //[MarshalAs(UnmanagedType.U4)]
+        public uint BitsPerColorChannel;
 
         public bool AdvancedColorSupported => (Value & 0x1) == 0x1;
         public bool AdvancedColorEnabled => (Value & 0x2) == 0x2;
@@ -255,16 +327,17 @@ namespace CCDInfo
     public struct LUID : IEquatable<LUID>
     {
         public uint LowPart;
-        public int HighPart;
+        public uint HighPart;
 
         public long Value => ((long)HighPart << 32) | LowPart;
 
         public bool Equals(LUID other)
-            => Value == other.Value;
+            => LowPart == other.LowPart &&
+                HighPart == other.HighPart;
 
         public override int GetHashCode()
         {
-            return Value.GetHashCode();
+            return (LowPart, HighPart).GetHashCode();
         }
 
         public override string ToString() => Value.ToString();
@@ -331,8 +404,8 @@ namespace CCDInfo
     public struct DISPLAYCONFIG_DESKTOP_IMAGE_INFO : IEquatable<DISPLAYCONFIG_DESKTOP_IMAGE_INFO>
     {
         public POINTL PathSourceSize;
-        public RECT DesktopImageRegion;
-        public RECT DesktopImageClip;
+        public RECTL DesktopImageRegion;
+        public RECTL DesktopImageClip;
 
         public bool Equals(DISPLAYCONFIG_DESKTOP_IMAGE_INFO other)
             => PathSourceSize.Equals(other.PathSourceSize) &&
@@ -350,12 +423,12 @@ namespace CCDInfo
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_VIDEO_SIGNAL_INFO : IEquatable<DISPLAYCONFIG_VIDEO_SIGNAL_INFO>
     {
-        public ulong PixelRate;
+        public long PixelRate;
         public DISPLAYCONFIG_RATIONAL HSyncFreq;
         public DISPLAYCONFIG_RATIONAL VSyncFreq;
         public DISPLAYCONFIG_2DREGION ActiveSize;
         public DISPLAYCONFIG_2DREGION TotalSize;
-        public uint VideoStandard;
+        public D3D_VIDEO_SIGNAL_STANDARD VideoStandard;
         public DISPLAYCONFIG_SCANLINE_ORDERING ScanLineOrdering;
 
         public bool Equals(DISPLAYCONFIG_VIDEO_SIGNAL_INFO other)
@@ -389,32 +462,7 @@ namespace CCDInfo
         }
 
         //public override string ToString() => $"{type.ToString("G")}";
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    public struct DISPLAYCONFIG_MODE_INFO_union : IEquatable<DISPLAYCONFIG_MODE_INFO_union>
-    {
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_TARGET_MODE TargetMode;
-
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_SOURCE_MODE SourceMode;
-
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
-
-        public bool Equals(DISPLAYCONFIG_MODE_INFO_union other)
-            => TargetMode.Equals(other.TargetMode) &&
-                SourceMode.Equals(other.SourceMode) &&
-                DesktopImageInfo.Equals(other.DesktopImageInfo);
-
-        public override int GetHashCode()
-        {
-            return (TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
-        }
-
-        //public override string ToString() => $"{type.ToString("G")}";
-    }
+    }    
 
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_PATH_SOURCE_INFO : IEquatable<DISPLAYCONFIG_PATH_SOURCE_INFO>
@@ -478,7 +526,7 @@ namespace CCDInfo
     {
         public DISPLAYCONFIG_PATH_SOURCE_INFO SourceInfo;
         public DISPLAYCONFIG_PATH_TARGET_INFO TargetInfo;
-        public DISPLAYCONFIG_PATH Flags;
+        public uint Flags;
 
         public bool Equals(DISPLAYCONFIG_PATH_INFO other)
             => SourceInfo.Equals(other.SourceInfo) &&
@@ -493,7 +541,44 @@ namespace CCDInfo
         //public override string ToString() => $"{type.ToString("G")}";
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Explicit)]
+    public struct DISPLAYCONFIG_MODE_INFO : IEquatable<DISPLAYCONFIG_MODE_INFO>
+    {
+        [FieldOffset((0))]
+        public DISPLAYCONFIG_MODE_INFO_TYPE InfoType;
+
+        [FieldOffset(4)]
+        public uint Id;
+
+        [FieldOffset(8)]
+        public LUID AdapterId; 
+
+        // These 3 fields are all a C union in wingdi.dll
+        [FieldOffset(16)]
+        public DISPLAYCONFIG_TARGET_MODE TargetMode;
+
+        [FieldOffset(16)]
+        public DISPLAYCONFIG_SOURCE_MODE SourceMode;
+
+        [FieldOffset(16)]
+        public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
+
+        public bool Equals(DISPLAYCONFIG_MODE_INFO other)
+            =>  InfoType == other.InfoType &&
+                Id == other.Id &&
+                // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
+                TargetMode.Equals(other.TargetMode) &&
+                SourceMode.Equals(other.SourceMode) &&
+                DesktopImageInfo.Equals(other.DesktopImageInfo);
+
+        public override int GetHashCode()
+        {
+            return (InfoType, Id, TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
+        }
+
+        //public override string ToString() => $"{type.ToString("G")}";
+    }
+    /*[StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_MODE_INFO : IEquatable<DISPLAYCONFIG_MODE_INFO>
     {
         public DISPLAYCONFIG_MODE_INFO_TYPE InfoType;
@@ -515,6 +600,32 @@ namespace CCDInfo
 
         //public override string ToString() => $"{type.ToString("G")}";
     }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct DISPLAYCONFIG_MODE_INFO_union : IEquatable<DISPLAYCONFIG_MODE_INFO_union>
+    {
+        [FieldOffset(0)]
+        public DISPLAYCONFIG_TARGET_MODE TargetMode;
+
+        [FieldOffset(0)]
+        public DISPLAYCONFIG_SOURCE_MODE SourceMode;
+
+        [FieldOffset(0)]
+        public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
+
+        public bool Equals(DISPLAYCONFIG_MODE_INFO_union other)
+            => TargetMode.Equals(other.TargetMode) &&
+                SourceMode.Equals(other.SourceMode) &&
+                DesktopImageInfo.Equals(other.DesktopImageInfo);
+
+        public override int GetHashCode()
+        {
+            return (TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
+        }
+
+        //public override string ToString() => $"{type.ToString("G")}";
+    }*/
+
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct DISPLAYCONFIG_GET_SOURCE_NAME : IEquatable<DISPLAYCONFIG_GET_SOURCE_NAME>
@@ -633,7 +744,7 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION : IEquatable<DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        [MarshalAs(UnmanagedType.U4)]
+        //[MarshalAs(UnmanagedType.U4)]
         public uint DisableMonitorVirtualResolution;
 
         public bool IsMonitorVirtualResolutionDisabled
@@ -658,7 +769,7 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SET_TARGET_PERSISTENCE : IEquatable<DISPLAYCONFIG_SET_TARGET_PERSISTENCE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        [MarshalAs(UnmanagedType.U4)]
+        //[MarshalAs(UnmanagedType.U4)]
         public uint BootPersistenceOn;
 
         public bool IsBootPersistenceOn
@@ -683,7 +794,7 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_GET_TARGET_BASE_TYPE : IEquatable<DISPLAYCONFIG_GET_TARGET_BASE_TYPE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        [MarshalAs(UnmanagedType.U4)]
+        //[MarshalAs(UnmanagedType.U4)]
         public DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY BaseOutputTechnology;
 
         public bool Equals(DISPLAYCONFIG_GET_TARGET_BASE_TYPE other)
@@ -703,7 +814,7 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE : IEquatable<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        [MarshalAs(UnmanagedType.U4)]
+        //[MarshalAs(UnmanagedType.U4)]
         public uint Value;
 
         public bool EnableAdvancedColor
@@ -758,14 +869,14 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct RECT : IEquatable<RECT>
+    public struct RECTL : IEquatable<RECTL>
     {
         public int Left;
         public int Top;
         public int Right;
         public int Bottom;
 
-        public bool Equals(RECT other)
+        public bool Equals(RECTL other)
             => Left == other.Left &&
                Top == other.Top &&
                Right == other.Right &&

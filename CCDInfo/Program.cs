@@ -1,12 +1,10 @@
 ﻿using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace CCDInfo
 {
@@ -52,7 +50,7 @@ namespace CCDInfo
 
         static void Main(string[] args)
         {
-            Console.WriteLine($"CCDInfo v1.0.4");
+            Console.WriteLine($"CCDInfo v1.0.5");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -71,6 +69,7 @@ namespace CCDInfo
                         Console.WriteLine($"ERROR - Couldn't save settings to the file {args[1]}");
                         Environment.Exit(1);
                     }
+                    Environment.Exit(0);
                 }
                 else if (args[0] == "load")
                 {
@@ -85,6 +84,7 @@ namespace CCDInfo
                         Environment.Exit(1);
                     }
                     loadFromFile(args[1]);
+                    Environment.Exit(0);
                 }
                 else if (args[0] == "help" || args[0] == "--help" || args[0] == "-h" || args[0] == "/?" || args[0] == "-?")
                 {
@@ -320,12 +320,12 @@ namespace CCDInfo
             //return savedDisplayConfig;
         }
 
-        static WINDOWS_DISPLAY_CONFIG getCurrentWindowsDisplayConfig()
+        static WINDOWS_DISPLAY_CONFIG getWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
         {
-            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
+            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();            
 
             // Get the size of the largest Active Paths and Modes arrays
-            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
+            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(selector, out var pathCount, out var modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
             {
                 Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
@@ -335,7 +335,7 @@ namespace CCDInfo
             // Get the Active Paths and Modes in use now
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+            err = CCDImport.QueryDisplayConfig(selector, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
             if (err != WIN32STATUS.ERROR_SUCCESS)
             {
                 Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to get the Display Configuration to save later");
@@ -357,7 +357,7 @@ namespace CCDInfo
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
                     Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
+                    //Environment.Exit(1);
                 }
 
                 // get SDR white levels
@@ -370,7 +370,7 @@ namespace CCDInfo
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
                     Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
+                    //Environment.Exit(1);
                 }
 
 
@@ -391,12 +391,14 @@ namespace CCDInfo
             return windowsDisplayConfig;
         }
 
+        
+
 
         static void saveToFile(string filename)
         {
             Console.WriteLine($"ProfileRepository/SaveProfiles: Attempting to save the profiles repository to the {filename}.");
 
-            myDisplayConfig = getCurrentWindowsDisplayConfig();
+            myDisplayConfig = getWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
 
             // Save the object to file!
             try
@@ -455,12 +457,12 @@ namespace CCDInfo
                     Console.WriteLine($"ProfileRepository/LoadProfiles: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
 
-                // Get the current windows display config
-                WINDOWS_DISPLAY_CONFIG currentWindowsDisplayConfig = getCurrentWindowsDisplayConfig();
+                // Get the all possible windows display configs
+                WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = getWindowsDisplayConfig(QDC.QDC_ALL_PATHS);
                 
                 // Check whether the display config is in use now
                 Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
-                if (myDisplayConfig.Equals(currentWindowsDisplayConfig))
+                if (myDisplayConfig.Equals(allWindowsDisplayConfig))
                 {
                     Console.WriteLine($"We have already applied this display config! No need to implement it again. Exiting.");
                     Environment.Exit(0);
@@ -469,7 +471,7 @@ namespace CCDInfo
                 Console.WriteLine($"ProfileRepository/LoadProfiles: The requested display configuration is different to the one in use at present. We need to change to the new one.");
 
                 // Now we go through the Paths to update the LUIDs as per Soroush's suggestion
-                updateAdapterIDs(ref myDisplayConfig, ref currentWindowsDisplayConfig);
+                updateAdapterIDs(ref myDisplayConfig, ref allWindowsDisplayConfig);
 
                 Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
                 // Test whether a specified display configuration is supported on the computer                    
