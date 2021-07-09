@@ -1,16 +1,19 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using Desharp;
 
 namespace CCDInfo
-{
+{    
+
     class Program
     {
-
+        [StructLayout(LayoutKind.Sequential)]
         public struct ADVANCED_HDR_INFO_PER_PATH : IEquatable<ADVANCED_HDR_INFO_PER_PATH>
         {
             public LUID AdapterId;
@@ -29,6 +32,7 @@ namespace CCDInfo
             }
         }
 
+        [StructLayout(LayoutKind.Sequential)]
         public struct WINDOWS_DISPLAY_CONFIG : IEquatable<WINDOWS_DISPLAY_CONFIG>
         {
             public DISPLAYCONFIG_PATH_INFO[] displayConfigPaths;
@@ -356,7 +360,7 @@ namespace CCDInfo
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
+                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
                     //Environment.Exit(1);
                 }
 
@@ -369,7 +373,7 @@ namespace CCDInfo
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
+                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
                     //Environment.Exit(1);
                 }
 
@@ -458,8 +462,47 @@ namespace CCDInfo
                 }
 
                 // Get the all possible windows display configs
-                WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = getWindowsDisplayConfig(QDC.QDC_ALL_PATHS);
-                
+                WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = getWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
+
+                // Dumping the things
+                Desharp.Debug.Configure(new Desharp.DebugConfig
+                {
+                    Enabled = true,
+                    //SourceLocation = true,
+                    Directory = "~/Logs",
+                    //LogWriteMilisecond = 10000,
+                    Depth = 30,
+                    // `EnvType.Web` or `EnvType.Windows`, used very rarely:
+                    EnvType = EnvType.Windows,
+                    // `Desharp.LogFormat.Html` or `Desharp.LogFormat.Text`:
+                    LogFormat = Desharp.LogFormat.Text,
+                    // for web apps only:
+                    //ErrorPage = "~/custom-error-page.html",
+                    //Panels = new[] { typeof(Desharp.Panels.SystemInfo), typeof(Desharp.Panels.Session) }
+                });
+
+                Console.WriteLine("Dumping the loaded config");
+                /*var dumper = JsonConvert.SerializeObject(myDisplayConfig,  Formatting.Indented, new JsonSerializerSettings
+                {
+                    MissingMemberHandling = MissingMemberHandling.Ignore,
+                    NullValueHandling = NullValueHandling.Include,
+                    DefaultValueHandling = DefaultValueHandling.Include,
+                    TypeNameHandling = TypeNameHandling.All,
+                    ObjectCreationHandling = ObjectCreationHandling.Replace
+                });*/
+                Debug.Dump(myDisplayConfig);
+
+                Console.WriteLine("Dumping the current config");
+                /*dumper = JsonConvert.SerializeObject(allWindowsDisplayConfig, typeof(WINDOWS_DISPLAY_CONFIG),  Formatting.Indented, new JsonSerializerSettings
+                {
+                    MissingMemberHandling = MissingMemberHandling.Ignore,
+                    NullValueHandling = NullValueHandling.Include,
+                    DefaultValueHandling = DefaultValueHandling.Include,
+                    TypeNameHandling = TypeNameHandling.All,
+                    ObjectCreationHandling = ObjectCreationHandling.Replace
+                });*/
+                Debug.Dump(allWindowsDisplayConfig);
+
                 // Check whether the display config is in use now
                 Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
                 if (myDisplayConfig.Equals(allWindowsDisplayConfig))
@@ -589,4 +632,5 @@ namespace CCDInfo
             }
         }
     }
+    
 }

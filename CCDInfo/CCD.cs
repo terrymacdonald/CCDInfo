@@ -464,16 +464,24 @@ namespace CCDInfo
         //public override string ToString() => $"{type.ToString("G")}";
     }    
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Explicit)]
     public struct DISPLAYCONFIG_PATH_SOURCE_INFO : IEquatable<DISPLAYCONFIG_PATH_SOURCE_INFO>
     {
+        [FieldOffset(0)]
         public LUID AdapterId;
+        [FieldOffset(8)]
         public uint Id;
+        [FieldOffset(12)]
         public uint ModeInfoIdx;
+        [FieldOffset(12)]
+        public ushort cloneGroupId;
+        [FieldOffset(14)]
+        public ushort sourceModeInfoIdx;
+        [FieldOffset(16)]
         public DISPLAYCONFIG_SOURCE_FLAGS StatusFlags;
 
         public bool Equals(DISPLAYCONFIG_PATH_SOURCE_INFO other)
-            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
+            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after a reboot.
                 Id == other.Id && 
                 ModeInfoIdx == other.ModeInfoIdx &&
                 StatusFlags.Equals(other.StatusFlags);
