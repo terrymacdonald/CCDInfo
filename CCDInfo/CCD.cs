@@ -170,8 +170,8 @@ namespace CCDInfo
         TEST_IF_VALID_DISPLAYCONFIG_WITH_TWEAKS = (SDC_VALIDATE | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES),
         SET_DISPLAYCONFIG_AND_SAVE = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
         SET_DISPLAYCONFIG_WITH_TWEAKS_AND_SAVE = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE),
-        DISPLAYMAGICIAN_SET = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
-        DISPLAYMAGICIAN_VALIDATE = (SDC_VALIDATE | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE),
+        DISPLAYMAGICIAN_SET = (SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE),
+        DISPLAYMAGICIAN_VALIDATE = (SDC_VALIDATE | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES | SDC_SAVE_TO_DATABASE),
         //DISPLAYMAGICIAN_SET = (SDC_APPLY | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_CHANGES | SDC_ALLOW_PATH_ORDER_CHANGES ),
         //DISPLAYMAGICIAN_VALIDATE = (SDC_VALIDATE | SDC_TOPOLOGY_SUPPLIED | SDC_ALLOW_CHANGES | SDC_ALLOW_PATH_ORDER_CHANGES ),
 
@@ -258,7 +258,7 @@ namespace CCDInfo
     public struct DISPLAYCONFIG_DEVICE_INFO_HEADER : IEquatable<DISPLAYCONFIG_DEVICE_INFO_HEADER>
     {
         public DISPLAYCONFIG_DEVICE_INFO_TYPE Type;
-        public int Size;
+        public uint Size;
         public LUID AdapterId;
         public uint Id;
 
@@ -329,7 +329,7 @@ namespace CCDInfo
         public uint LowPart;
         public uint HighPart;
 
-        public long Value => ((long)HighPart << 32) | LowPart;
+        public ulong Value => ((ulong)HighPart << 32) | LowPart;
 
         public bool Equals(LUID other)
             => LowPart == other.LowPart &&
@@ -423,7 +423,7 @@ namespace CCDInfo
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_VIDEO_SIGNAL_INFO : IEquatable<DISPLAYCONFIG_VIDEO_SIGNAL_INFO>
     {
-        public long PixelRate;
+        public ulong PixelRate;
         public DISPLAYCONFIG_RATIONAL HSyncFreq;
         public DISPLAYCONFIG_RATIONAL VSyncFreq;
         public DISPLAYCONFIG_2DREGION ActiveSize;
@@ -586,63 +586,15 @@ namespace CCDInfo
 
         //public override string ToString() => $"{type.ToString("G")}";
     }
-    /*[StructLayout(LayoutKind.Sequential)]
-    public struct DISPLAYCONFIG_MODE_INFO : IEquatable<DISPLAYCONFIG_MODE_INFO>
-    {
-        public DISPLAYCONFIG_MODE_INFO_TYPE InfoType;
-        public uint Id;
-        public LUID AdapterId;
-        public DISPLAYCONFIG_MODE_INFO_union Info;
-
-        public bool Equals(DISPLAYCONFIG_MODE_INFO other)
-            => InfoType == other.InfoType &&
-               Id == other.Id && 
-               // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
-               Info.Equals(other.Info);
-
-        public override int GetHashCode()
-        {
-            //return (InfoType, Id, AdapterId, Info).GetHashCode();
-            return (InfoType, AdapterId, Info).GetHashCode();
-        }
-
-        //public override string ToString() => $"{type.ToString("G")}";
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    public struct DISPLAYCONFIG_MODE_INFO_union : IEquatable<DISPLAYCONFIG_MODE_INFO_union>
-    {
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_TARGET_MODE TargetMode;
-
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_SOURCE_MODE SourceMode;
-
-        [FieldOffset(0)]
-        public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
-
-        public bool Equals(DISPLAYCONFIG_MODE_INFO_union other)
-            => TargetMode.Equals(other.TargetMode) &&
-                SourceMode.Equals(other.SourceMode) &&
-                DesktopImageInfo.Equals(other.DesktopImageInfo);
-
-        public override int GetHashCode()
-        {
-            return (TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
-        }
-
-        //public override string ToString() => $"{type.ToString("G")}";
-    }*/
-
-
+   
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct DISPLAYCONFIG_GET_SOURCE_NAME : IEquatable<DISPLAYCONFIG_GET_SOURCE_NAME>
+    public struct DISPLAYCONFIG_SOURCE_DEVICE_NAME : IEquatable<DISPLAYCONFIG_SOURCE_DEVICE_NAME>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string ViewGdiDeviceName;
 
-        public bool Equals(DISPLAYCONFIG_GET_SOURCE_NAME other)
+        public bool Equals(DISPLAYCONFIG_SOURCE_DEVICE_NAME other)
             => Header.Equals(other.Header) &&
                ViewGdiDeviceName == other.ViewGdiDeviceName;
 
@@ -662,7 +614,7 @@ namespace CCDInfo
         public bool Equals(DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS other)
             => Value == other.Value;
 
-        public bool FriendlyNameFromEdid => (Value & 0x1) == 0x1;
+        public bool FriendlyNameFromEdid => (Value & 0x1) == 0x1; // Might be this broken?
         public bool FriendlyNameForced => (Value & 0x2) == 0x2;
         public bool EdidIdsValid => (Value & 0x4) == 0x4;
 
@@ -675,7 +627,7 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct DISPLAYCONFIG_GET_TARGET_NAME : IEquatable<DISPLAYCONFIG_GET_TARGET_NAME>
+    public struct DISPLAYCONFIG_TARGET_DEVICE_NAME : IEquatable<DISPLAYCONFIG_TARGET_DEVICE_NAME>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS Flags;
@@ -688,7 +640,7 @@ namespace CCDInfo
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string MonitorDevicePath;
 
-        public bool Equals(DISPLAYCONFIG_GET_TARGET_NAME other)
+        public bool Equals(DISPLAYCONFIG_TARGET_DEVICE_NAME other)
             => Header.Equals(other.Header) &&
                Flags.Equals(other.Flags) &&
                OutputTechnology.Equals(other.OutputTechnology) &&
@@ -708,14 +660,14 @@ namespace CCDInfo
 
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_GET_TARGET_PREFERRED_NAME : IEquatable<DISPLAYCONFIG_GET_TARGET_PREFERRED_NAME>
+    internal struct DISPLAYCONFIG_TARGET_PREFERRED_MODE : IEquatable<DISPLAYCONFIG_TARGET_PREFERRED_MODE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public uint Width;
         public uint Height;
         public DISPLAYCONFIG_TARGET_MODE TargetMode;
 
-        public bool Equals(DISPLAYCONFIG_GET_TARGET_PREFERRED_NAME other)
+        public bool Equals(DISPLAYCONFIG_TARGET_PREFERRED_MODE other)
             => Header.Equals(other.Header) &&
                Width == other.Width &&
                Height == other.Height &&
@@ -730,13 +682,13 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct DISPLAYCONFIG_GET_ADAPTER_NAME : IEquatable<DISPLAYCONFIG_GET_ADAPTER_NAME>
+    internal struct DISPLAYCONFIG_ADAPTER_NAME : IEquatable<DISPLAYCONFIG_ADAPTER_NAME>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string AdapterDevicePath;
 
-        public bool Equals(DISPLAYCONFIG_GET_ADAPTER_NAME other)
+        public bool Equals(DISPLAYCONFIG_ADAPTER_NAME other)
             => Header.Equals(other.Header) &&
                AdapterDevicePath == other.AdapterDevicePath;
 
@@ -752,21 +704,20 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION : IEquatable<DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        //[MarshalAs(UnmanagedType.U4)]
-        public uint DisableMonitorVirtualResolution;
+        public uint Value;
 
         public bool IsMonitorVirtualResolutionDisabled
         {
-            get => (DisableMonitorVirtualResolution & 0x1) == 0x1;
+            get => (Value & 0x1) == 0x1;
         }
 
         public bool Equals(DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION other)
             => Header.Equals(other.Header) &&
-               DisableMonitorVirtualResolution == other.DisableMonitorVirtualResolution;
+               Value == other.Value;
 
         public override int GetHashCode()
         {
-            return (Header, DisableMonitorVirtualResolution).GetHashCode();
+            return (Header, Value).GetHashCode();
         }
 
         //public override string ToString() => $"{type.ToString("G")}";
@@ -777,21 +728,20 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SET_TARGET_PERSISTENCE : IEquatable<DISPLAYCONFIG_SET_TARGET_PERSISTENCE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        //[MarshalAs(UnmanagedType.U4)]
-        public uint BootPersistenceOn;
+        public uint Value;
 
         public bool IsBootPersistenceOn
         {
-            get => (BootPersistenceOn & 0x1) == 0x1;
+            get => (Value & 0x1) == 0x1;
         }
 
         public bool Equals(DISPLAYCONFIG_SET_TARGET_PERSISTENCE other)
             => Header.Equals(other.Header) &&
-               BootPersistenceOn == other.BootPersistenceOn;
+               Value == other.Value;
 
         public override int GetHashCode()
         {
-            return (Header, BootPersistenceOn).GetHashCode();
+            return (Header, Value).GetHashCode();
         }
 
         //public override string ToString() => $"{type.ToString("G")}";
@@ -799,13 +749,13 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_GET_TARGET_BASE_TYPE : IEquatable<DISPLAYCONFIG_GET_TARGET_BASE_TYPE>
+    internal struct DISPLAYCONFIG_TARGET_BASE_TYPE : IEquatable<DISPLAYCONFIG_TARGET_BASE_TYPE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         //[MarshalAs(UnmanagedType.U4)]
         public DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY BaseOutputTechnology;
 
-        public bool Equals(DISPLAYCONFIG_GET_TARGET_BASE_TYPE other)
+        public bool Equals(DISPLAYCONFIG_TARGET_BASE_TYPE other)
             => Header.Equals(other.Header) &&
                BaseOutputTechnology == other.BaseOutputTechnology;
 
@@ -822,7 +772,6 @@ namespace CCDInfo
     internal struct DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE : IEquatable<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
-        //[MarshalAs(UnmanagedType.U4)]
         public uint Value;
 
         public bool EnableAdvancedColor
@@ -861,7 +810,7 @@ namespace CCDInfo
         // peak value i.e. 80 nits represented as fixed point.
         // To get value in nits use the following conversion
         // SDRWhiteLevel in nits = (SDRWhiteLevel / 1000 ) * 80
-        public uint SDRWhiteLevel;
+        public ulong SDRWhiteLevel;
 
         public bool Equals(DISPLAYCONFIG_SDR_WHITE_LEVEL other)
             => Header.Equals(other.Header) &&
@@ -918,22 +867,22 @@ namespace CCDInfo
 
         // DisplayConfigGetDeviceInfo
         [DllImport("user32")]
-        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_GET_SOURCE_NAME requestPacket);
+        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SOURCE_DEVICE_NAME requestPacket);
 
         [DllImport("user32")]
-        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_GET_TARGET_NAME requestPacket);
+        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME requestPacket);
 
         [DllImport("user32")]
-        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_GET_TARGET_PREFERRED_NAME requestPacket);
+        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_PREFERRED_MODE requestPacket);
 
         [DllImport("user32")]
-        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_GET_ADAPTER_NAME requestPacket);
+        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_ADAPTER_NAME requestPacket);
 
         [DllImport("user32")]
         public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SET_TARGET_PERSISTENCE requestPacket);
 
         [DllImport("user32")]
-        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_GET_TARGET_BASE_TYPE requestPacket);
+        public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_BASE_TYPE requestPacket);
 
         [DllImport("user32")]
         public static extern WIN32STATUS DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION requestPacket);
