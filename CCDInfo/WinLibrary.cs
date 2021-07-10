@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using Desharp;
 using Microsoft.Win32.SafeHandles;
 using DisplayMagicianShared;
 using System.ComponentModel;
@@ -556,59 +555,8 @@ namespace DisplayMagicianShared.Windows
             // Get the all possible windows display configs
             WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = GetWindowsDisplayConfig(QDC.QDC_ALL_PATHS);
 
-
-            // Dumping the things
-            Desharp.Debug.Configure(new Desharp.DebugConfig
-            {
-                Enabled = true,
-                //SourceLocation = true,
-                Directory = "~/Logs",
-                //LogWriteMilisecond = 10000,
-                Depth = 30,
-                // `EnvType.Web` or `EnvType.Windows`, used very rarely:
-                EnvType = EnvType.Windows,
-                // `Desharp.LogFormat.Html` or `Desharp.LogFormat.Text`:
-                LogFormat = Desharp.LogFormat.Text,
-                // for web apps only:
-                //ErrorPage = "~/custom-error-page.html",
-                //Panels = new[] { typeof(Desharp.Panels.SystemInfo), typeof(Desharp.Panels.Session) }
-            });
-
-            Console.WriteLine("Dumping the loaded config as loaded");
-            /*var dumper = JsonConvert.SerializeObject(myDisplayConfig,  Formatting.Indented, new JsonSerializerSettings
-            {
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                NullValueHandling = NullValueHandling.Include,
-                DefaultValueHandling = DefaultValueHandling.Include,
-                TypeNameHandling = TypeNameHandling.All,
-                ObjectCreationHandling = ObjectCreationHandling.Replace
-            });*/
-            Debug.Dump(displayConfig);
-
-            Console.WriteLine("Dumping the current config");
-            /*dumper = JsonConvert.SerializeObject(allWindowsDisplayConfig, typeof(WINDOWS_DISPLAY_CONFIG),  Formatting.Indented, new JsonSerializerSettings
-            {
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                NullValueHandling = NullValueHandling.Include,
-                DefaultValueHandling = DefaultValueHandling.Include,
-                TypeNameHandling = TypeNameHandling.All,
-                ObjectCreationHandling = ObjectCreationHandling.Replace
-            });*/
-            Debug.Dump(allWindowsDisplayConfig);
-
             // Now we go through the Paths to update the LUIDs as per Soroush's suggestion
             PatchAdapterIDs(ref displayConfig, allWindowsDisplayConfig.displayAdapters);
-
-            Console.WriteLine("Dumping the loaded config after modification");
-            /*var dumper = JsonConvert.SerializeObject(myDisplayConfig,  Formatting.Indented, new JsonSerializerSettings
-            {
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                NullValueHandling = NullValueHandling.Include,
-                DefaultValueHandling = DefaultValueHandling.Include,
-                TypeNameHandling = TypeNameHandling.All,
-                ObjectCreationHandling = ObjectCreationHandling.Replace
-            });*/
-            Debug.Dump(displayConfig);
 
             Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
             // Test whether a specified display configuration is supported on the computer                    
