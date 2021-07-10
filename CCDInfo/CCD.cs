@@ -507,7 +507,22 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_RATIONAL RefreshRate;
         public DISPLAYCONFIG_SCANLINE_ORDERING ScanLineOrdering;
         public bool TargetAvailable;
-        public DISPLAYCONFIG_TARGET_FLAGS StatusFlags;
+        public uint StatusFlags;
+
+        public bool TargetInUse => (StatusFlags & 0x1) == 0x1;
+        public bool TargetForcible => (StatusFlags & 0x2) == 0x2;
+        public bool ForcedAvailabilityBoot => (StatusFlags & 0x4) == 0x4;
+        public bool ForcedAvailabilityPath => (StatusFlags & 0x8) == 0x8;
+        public bool ForcedAvailabilitySystem => (StatusFlags & 0x10) == 0x10;
+        public bool IsHMD => (StatusFlags & 0x20) == 0x20;
+
+
+        /* DISPLAYCONFIG_TARGET_IN_USE = 0x00000001,
+        DISPLAYCONFIG_TARGET_FORCIBLE = 0x00000002,
+        DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_BOOT = 0x00000004,
+        DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_PATH = 0x00000008,
+        DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_SYSTEM = 0x00000010,
+        DISPLAYCONFIG_TARGET_IS_HMD = 0x00000020,*/
 
         public bool Equals(DISPLAYCONFIG_PATH_TARGET_INFO other)
             => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
@@ -572,15 +587,41 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
 
         public bool Equals(DISPLAYCONFIG_MODE_INFO other)
-            =>  InfoType == other.InfoType &&
+        {
+            if (InfoType != other.InfoType)
+                return false;
+
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET &&
                 Id == other.Id &&
-                // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
-                TargetMode.Equals(other.TargetMode) &&
-                SourceMode.Equals(other.SourceMode) &&
-                DesktopImageInfo.Equals(other.DesktopImageInfo);
+                TargetMode.Equals(other.TargetMode))
+                return true;
+            
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE &&
+                Id == other.Id &&
+                SourceMode.Equals(other.SourceMode))
+                return true;
+            
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_DESKTOP_IMAGE &&
+                Id == other.Id &&
+                DesktopImageInfo.Equals(other.DesktopImageInfo))
+                return true;
+
+            return false;
+        }
+            
 
         public override int GetHashCode()
         {
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
+                return (InfoType, Id, TargetMode).GetHashCode();
+
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE)
+                return (InfoType, Id, SourceMode).GetHashCode();
+
+            if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_DESKTOP_IMAGE)
+                return (InfoType, Id, DesktopImageInfo).GetHashCode();
+
+            // otherwise we return everything
             return (InfoType, Id, TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
         }
 

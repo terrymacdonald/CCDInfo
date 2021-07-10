@@ -24,7 +24,7 @@ namespace DisplayMagicianShared.Windows
            SDRWhiteLevel.Equals(other.SDRWhiteLevel);
         public override int GetHashCode()
         {
-            return (AdapterId, Id, AdvancedColorInfo, SDRWhiteLevel).GetHashCode();
+            return (Id, AdvancedColorInfo, SDRWhiteLevel).GetHashCode();
         }
     }
 
@@ -111,7 +111,7 @@ namespace DisplayMagicianShared.Windows
             return _instance;
         }
 
-        private static void PatchAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong, string> currentAdapterMap)
+        private void PatchAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong, string> currentAdapterMap)
         {
 
             Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
@@ -198,12 +198,12 @@ namespace DisplayMagicianShared.Windows
 
         }
 
-        public static WINDOWS_DISPLAY_CONFIG GetActiveConfig()
+        public WINDOWS_DISPLAY_CONFIG GetActiveConfig()
         {
             return GetWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
         }
 
-        private static WINDOWS_DISPLAY_CONFIG GetWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
+        private WINDOWS_DISPLAY_CONFIG GetWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
         {
 
             // Get the size of the largest Active Paths and Modes arrays
@@ -320,7 +320,7 @@ namespace DisplayMagicianShared.Windows
         }
 
 
-        private static LUID AdapterValueToLUID(ulong adapterValue)
+        private LUID AdapterValueToLUID(ulong adapterValue)
         {
             LUID luid = new LUID();
             luid.LowPart = (uint)(adapterValue & uint.MaxValue);
@@ -328,7 +328,7 @@ namespace DisplayMagicianShared.Windows
             return luid;
         }
 
-        static void PrintActiveConfig()
+        public void PrintActiveConfig()
         {
 
             // Get the size of the largest Active Paths and Modes arrays
@@ -536,7 +536,7 @@ namespace DisplayMagicianShared.Windows
             }
         }
        
-        static bool SetActiveConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
+        public bool SetActiveConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
         {
 
             // Get the current windows display configs to compare to the one we loaded
@@ -626,100 +626,126 @@ namespace DisplayMagicianShared.Windows
             return true;
         }
 
+        public bool IsActiveConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
+        {
+            return true;
+        }
 
-        public static List<string> GetCurrentDisplayIdentifiers()
+        public bool IsValidConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
+        {
+            return true;
+        }
+
+        public List<string> GetCurrentDisplayIdentifiers()
+        {
+            return GetSomeDisplayIdentifiers(QDC.QDC_ONLY_ACTIVE_PATHS);
+        }
+
+        public List<string> GetAllConnectedDisplayIdentifiers()            
+        {
+            return GetSomeDisplayIdentifiers(QDC.QDC_ALL_PATHS);
+        }
+
+        private List<string> GetSomeDisplayIdentifiers(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
         {
             SharedLogger.logger.Debug($"WinLibrary/GetCurrentDisplayIdentifiers: Generating the unique Display Identifiers for the currently active configuration");
 
             List<string> displayIdentifiers = new List<string>();
 
-            // Then go through the adapters we have running using the WindowsDisplayAPI
-            List<Display> attachedDisplayDevices = Display.GetDisplays().ToList();
-
-            SharedLogger.logger.Debug($"ProfileRepository/GenerateProfileDisplayIdentifiers: We are using the standard Windows Display API to figure out what display devices are attached and available. There are {attachedDisplayDevices.Count} display devices detected.");
-
-            foreach (Display attachedDisplay in attachedDisplayDevices)
+            SharedLogger.logger.Trace($"WinLibrary/GetCurrentDisplayIdentifiers: Testing whether the display configuration is valid (allowing tweaks).");
+            // Get the size of the largest Active Paths and Modes arrays
+            int pathCount = 0;
+            int modeCount = 0;
+            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(selector, out pathCount, out modeCount);
+            if (err != WIN32STATUS.ERROR_SUCCESS)
             {
-                DisplayAdapter displayAdapter = null;
-                PathDisplayAdapter pathDisplayAdapter = null;
-                PathDisplaySource pathDisplaySource = null;
-                PathDisplayTarget pathDisplayTarget = null;
+                Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                Environment.Exit(1);
+            }
 
-
-                try
+            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+            err = CCDImport.QueryDisplayConfig(selector, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+            if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
+            {
+                // Screen changed in between GetDisplayConfigBufferSizes and QueryDisplayConfig, so we need to get buffer sizes again
+                // as per https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig 
+                err = CCDImport.GetDisplayConfigBufferSizes(selector, out pathCount, out modeCount);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    // We keep these lines here to detect if there is an exception so we can report it
-                    // nicely to the user.
-                    displayAdapter = attachedDisplay.Adapter;
-                    pathDisplayAdapter = displayAdapter.ToPathDisplayAdapter();
-                    pathDisplaySource = attachedDisplay.ToPathDisplaySource();
-                    pathDisplayTarget = attachedDisplay.ToPathDisplayTarget();
-
-                    // This line is just to force an EDID lookup first up so that we can deterine if there is an issue 
-                    // with the Monitor, and then tell the user
-                    string EDIDManufacturerId = pathDisplayTarget.EDIDManufactureId.ToString();
-
-                    // print some trace messages so we can figure out issues if needed later
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDN : {attachedDisplay.DeviceName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDFN : {attachedDisplay.DisplayFullName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDIN : {attachedDisplay.DisplayName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDIN : {attachedDisplay.IsAvailable}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDIGP : {attachedDisplay.IsGDIPrimary}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADDIV : {attachedDisplay.IsValid}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSCD : {attachedDisplay.CurrentSetting.ColorDepth}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSF : {attachedDisplay.CurrentSetting.Frequency}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSIE : {attachedDisplay.CurrentSetting.IsEnable}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSII : {attachedDisplay.CurrentSetting.IsInterlaced}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSO : {attachedDisplay.CurrentSetting.Orientation}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSOSM : {attachedDisplay.CurrentSetting.OutputScalingMode}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSP : {attachedDisplay.CurrentSetting.Position}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: ADCSR : {attachedDisplay.CurrentSetting.Resolution}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: DP : {displayAdapter.DevicePath}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: DK : {displayAdapter.DeviceKey}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: DN : {displayAdapter.DeviceName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: DK : {displayAdapter.DeviceKey}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: AI : {pathDisplayAdapter.AdapterId}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: AIDP : {pathDisplayAdapter.DevicePath}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: AIII : {pathDisplayAdapter.IsInvalid}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: DDA : {displayAdapter.DeviceName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSA : {pathDisplaySource.Adapter}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSCDS : {pathDisplaySource.CurrentDPIScale}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSDN : {pathDisplaySource.DisplayName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSMDS : {pathDisplaySource.MaximumDPIScale}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSRDS : {pathDisplaySource.RecommendedDPIScale}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDSSI : {pathDisplaySource.SourceId}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTA : {pathDisplayTarget.Adapter}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTCI : {pathDisplayTarget.ConnectorInstance}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTDP : {pathDisplayTarget.DevicePath}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTEMC : {pathDisplayTarget.EDIDManufactureCode}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTEMI : {pathDisplayTarget.EDIDManufactureId}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTEPC : {pathDisplayTarget.EDIDProductCode}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTFN : {pathDisplayTarget.FriendlyName}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTIA : {pathDisplayTarget.IsAvailable}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTPR : {pathDisplayTarget.PreferredResolution}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTPSM : {pathDisplayTarget.PreferredSignalMode}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTTI : {pathDisplayTarget.TargetId}");
-                    SharedLogger.logger.Trace($"ProfileRepository/GenerateProfileDisplayIdentifiers: PDTVRS : {pathDisplayTarget.VirtualResolutionSupport}");
+                    Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                    Environment.Exit(1);
                 }
-                catch (WindowsDisplayAPI.Exceptions.InvalidEDIDInformation ex)
+                paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+                modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+                err = CCDImport.QueryDisplayConfig(selector, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
                 {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception while trying to get information from your monitor {attachedDisplay.DisplayFullName} about it's configuration. DisplayMagician may not be able to use this monitor!");
-                    if (!notifiedEDIDErrorToUser)
-                    {
-                        MessageBox.Show(
-                            $"Your monitor {attachedDisplay.DisplayFullName} is not responding when we ask about it's configuration. DisplayMagician may not be able to use this monitor!", @"DisplayMagician cannot talk to your monitor",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                        notifiedEDIDErrorToUser = true;
-                    }
+                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} ERROR_INSUFFICIENT_BUFFER twice when trying to query all available displays");
                 }
-                catch (WindowsDisplayAPI.Exceptions.TargetNotAvailableException ex)
+                else if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception while we were trying to access the DisplayTarget to gather information about your display configuration.");
+                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
+                    Environment.Exit(1);
                 }
-                catch (Exception ex)
+            }
+            else if (err != WIN32STATUS.ERROR_SUCCESS)
+            {
+                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
+                Environment.Exit(1);
+            }
+
+            foreach (var path in paths)
+            {
+                if (path.TargetInfo.TargetAvailable == false)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception accessing one of the WindowsDisplayAPI items to print it out during a TRACE session");
+                    // We want to skip this one cause it's not valid
+                    continue;
+                }
+
+                /*if (path.TargetInfo.TargetInUse == false)
+                {
+                    // We want to skip this one cause it's not valid
+                    continue;
+                }*/
+
+                // get display source name
+                var sourceInfo = new DISPLAYCONFIG_SOURCE_DEVICE_NAME();
+                sourceInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+                sourceInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SOURCE_DEVICE_NAME>();
+                sourceInfo.Header.AdapterId = path.SourceInfo.AdapterId;
+                sourceInfo.Header.Id = path.SourceInfo.Id;
+                err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the source info for source adapter #{path.SourceInfo.AdapterId}");
+                    Environment.Exit(1);
+                }
+
+                // get display target name
+                var targetInfo = new DISPLAYCONFIG_TARGET_DEVICE_NAME();
+                targetInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+                targetInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>();
+                targetInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                targetInfo.Header.Id = path.TargetInfo.Id;
+                err = CCDImport.DisplayConfigGetDeviceInfo(ref targetInfo);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
+                }
+
+                // get display adapter name
+                var adapterInfo = new DISPLAYCONFIG_ADAPTER_NAME();
+                adapterInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME;
+                adapterInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>();
+                adapterInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                adapterInfo.Header.Id = path.TargetInfo.Id;
+                err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the adapter name for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);
                 }
 
                 // Create an array of all the important display info we need to record
@@ -727,96 +753,50 @@ namespace DisplayMagicianShared.Windows
                 displayInfo.Add("WINAPI");
                 try
                 {
-                    displayInfo.Add(displayAdapter.DeviceName.ToString());
+                    displayInfo.Add(adapterInfo.AdapterDevicePath.ToString());
                 }
                 catch (Exception ex)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Adapter Device name from video card. Substituting with a # instead");
+                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Adapter Device Path from video card. Substituting with a # instead");
                     displayInfo.Add("#");
                 }
                 try
                 {
-                    displayInfo.Add(pathDisplayAdapter.AdapterId.ToString());
+                    displayInfo.Add(targetInfo.OutputTechnology.ToString());
                 }
                 catch (Exception ex)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Adapter ID from video card. Substituting with a # instead");
+                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Connector Instance from video card. Substituting with a # instead");
                     displayInfo.Add("#");
                 }
                 try
                 {
-                    displayInfo.Add(pathDisplayTarget.ConnectorInstance.ToString());
-                }
-                catch (WindowsDisplayAPI.Exceptions.TargetNotAvailableException ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception2 while we were trying to access the DisplayTarget to gather information about your display configuration.");
+                    displayInfo.Add(targetInfo.EdidManufactureId.ToString());
                 }
                 catch (Exception ex)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Target Connector Instance from video card. Substituting with a # instead");
+                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display EDID Manufacturer Code from video card. Substituting with a # instead");
                     displayInfo.Add("#");
                 }
                 try
                 {
-                    displayInfo.Add(pathDisplayTarget.FriendlyName);
+                    displayInfo.Add(targetInfo.EdidProductCodeId.ToString());
                 }
                 catch (Exception ex)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Target Friendly name from video card. Substituting with a # instead");
+                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display EDID Product Code from video card. Substituting with a # instead");
                     displayInfo.Add("#");
                 }
                 try
                 {
-                    displayInfo.Add(pathDisplayTarget.EDIDManufactureCode.ToString());
-                }
-                catch (WindowsDisplayAPI.Exceptions.InvalidEDIDInformation ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers2: Exception while trying to get information from your monitor {attachedDisplay.DisplayFullName} about it's configuration. DisplayMagician may not be able to use this monitor!");
-                }
-                catch (WindowsDisplayAPI.Exceptions.TargetNotAvailableException ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers2: Exception while we were trying to access the DisplayTarget to gather information about your display configuration.");
+                    displayInfo.Add(targetInfo.MonitorFriendlyDeviceName.ToString());
                 }
                 catch (Exception ex)
                 {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers2: Exception getting Windows Display EDID Manufacturer Code from video card. Substituting with a # instead");
+                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers2: Exception getting Windows Display Target Friendly name from video card. Substituting with a # instead");
                     displayInfo.Add("#");
                 }
-                try
-                {
-                    displayInfo.Add(pathDisplayTarget.EDIDManufactureId.ToString());
-                }
-                catch (WindowsDisplayAPI.Exceptions.InvalidEDIDInformation ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers3: Exception while trying to get information from your monitor {attachedDisplay.DisplayFullName} about it's configuration. DisplayMagician may not be able to use this monitor!");
-                }
-                catch (WindowsDisplayAPI.Exceptions.TargetNotAvailableException ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers3: Exception while we were trying to access the DisplayTarget to gather information about your display configuration.");
-                }
-                catch (Exception ex)
-                {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers3: Exception getting Windows Display EDID Manufacturer ID from video card. Substituting with a # instead");
-                    displayInfo.Add("#");
-                }
-                try
-                {
-                    displayInfo.Add(pathDisplayTarget.EDIDProductCode.ToString());
-                }
-                catch (WindowsDisplayAPI.Exceptions.InvalidEDIDInformation ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers4: Exception while trying to get information from your monitor {attachedDisplay.DisplayFullName} about it's configuration. DisplayMagician may not be able to use this monitor!");
-                }
-                catch (WindowsDisplayAPI.Exceptions.TargetNotAvailableException ex)
-                {
-                    SharedLogger.logger.Error(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers4: Exception while we were trying to access the DisplayTarget to gather information about your display configuration.");
-                }
-                catch (Exception ex)
-                {
-                    SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers4: Exception getting Windows Display EDID Product Code from video card. Substituting with a # instead");
-                    displayInfo.Add("#");
-                }
-                try
+                /*try
                 {
                     displayInfo.Add(pathDisplayTarget.TargetId.ToString());
                 }
@@ -824,13 +804,18 @@ namespace DisplayMagicianShared.Windows
                 {
                     SharedLogger.logger.Warn(ex, $"ProfileRepository/GenerateProfileDisplayIdentifiers: Exception getting Windows Display Target ID from video card. Substituting with a # instead");
                     displayInfo.Add("#");
-                }
+                }*/
 
                 // Create a display identifier out of it
                 string displayIdentifier = String.Join("|", displayInfo);
                 // Add it to the list of display identifiers so we can return it
-                displayIdentifiers.Add(displayIdentifier);
-                SharedLogger.logger.Debug($"ProfileRepository/GenerateProfileDisplayIdentifiers: DisplayIdentifier: {displayIdentifier}");
+                // but only add it if it doesn't already exist. Otherwise we get duplicates :/
+                if (!displayIdentifiers.Contains(displayIdentifier))
+                {
+                    displayIdentifiers.Add(displayIdentifier);
+                    SharedLogger.logger.Debug($"ProfileRepository/GenerateProfileDisplayIdentifiers: DisplayIdentifier: {displayIdentifier}");
+                }                
+                
 
             }
 
@@ -838,7 +823,7 @@ namespace DisplayMagicianShared.Windows
             displayIdentifiers.Sort();
 
             return displayIdentifiers;
-        }
+        }        
 
     }
 
