@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CCDInfo
+namespace DisplayMagicianShared.Windows
 {
    
     public enum WIN32STATUS : uint

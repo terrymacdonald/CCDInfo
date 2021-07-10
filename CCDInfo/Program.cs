@@ -7,6 +7,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Desharp;
 using System.Collections.Generic;
+using DisplayMagicianShared.Windows;
+using NLog.Config;
+using DisplayMagicianShared;
 
 namespace CCDInfo
 {    
@@ -14,48 +17,54 @@ namespace CCDInfo
     class Program
     {  
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct ADVANCED_HDR_INFO_PER_PATH : IEquatable<ADVANCED_HDR_INFO_PER_PATH>
-        {
-            public LUID AdapterId;
-            public uint Id;
-            public DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO AdvancedColorInfo;
-            public DISPLAYCONFIG_SDR_WHITE_LEVEL SDRWhiteLevel;
-
-            public bool Equals(ADVANCED_HDR_INFO_PER_PATH other)
-            => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
-                Id == other.Id &&
-               AdvancedColorInfo.Equals(other.AdvancedColorInfo) &&
-               SDRWhiteLevel.Equals(other.SDRWhiteLevel);
-            public override int GetHashCode()
-            {
-                return (AdapterId, Id, AdvancedColorInfo, SDRWhiteLevel).GetHashCode();
-            }
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct WINDOWS_DISPLAY_CONFIG : IEquatable<WINDOWS_DISPLAY_CONFIG>
-        {
-            public Dictionary<ulong, string> displayAdapters;
-            public DISPLAYCONFIG_PATH_INFO[] displayConfigPaths;
-            public DISPLAYCONFIG_MODE_INFO[] displayConfigModes;
-            public ADVANCED_HDR_INFO_PER_PATH[] displayHDRStates;
-
-            public bool Equals(WINDOWS_DISPLAY_CONFIG other)
-            => displayConfigPaths.SequenceEqual(other.displayConfigPaths) &&
-               displayConfigModes.SequenceEqual(other.displayConfigModes) &&
-               displayHDRStates.SequenceEqual(other.displayHDRStates);
-
-            public override int GetHashCode()
-            {
-                return (displayConfigPaths, displayConfigModes, displayHDRStates).GetHashCode();
-            }
-        }
-
         static WINDOWS_DISPLAY_CONFIG myDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
+
+        private static readonly NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        private static SharedLogger sharedLogger;
 
         static void Main(string[] args)
         {
+
+            // Prepare NLog for logging
+
+            //NLog.Common.InternalLogger.LogLevel = NLog.LogLevel.Debug;
+            //NLog.Common.InternalLogger.LogToConsole = true;
+            //NLog.Common.InternalLogger.LogFile = "C:\\Users\\terry\\AppData\\Local\\DisplayMagician\\Logs\\nlog-internal.txt";
+
+            var config = new NLog.Config.LoggingConfiguration();
+
+            // Targets where to log to: File and Console
+            //string date = DateTime.Now.ToString("yyyyMMdd.HHmmss");
+            string AppLogFilename = Path.Combine($"CCDInfo.log");
+
+            // Rules for mapping loggers to targets          
+            NLog.LogLevel logLevel = NLog.LogLevel.Info;            
+
+            // Create the log file target
+            var logfile = new NLog.Targets.FileTarget("logfile")
+            {
+                FileName = AppLogFilename,
+                DeleteOldFileOnStartup = true
+            };
+
+            // Create a logging rule to use the log file target
+            var loggingRule = new LoggingRule("LogToFile");
+            loggingRule.EnableLoggingForLevels(logLevel, NLog.LogLevel.Fatal);
+            loggingRule.Targets.Add(logfile);
+            loggingRule.LoggerNamePattern = "*";
+            config.LoggingRules.Add(loggingRule);
+
+            // Apply config           
+            NLog.LogManager.Configuration = config;
+
+            // Make DisplayMagicianShared use the same log file by sending it the 
+            // details of the existing NLog logger
+            sharedLogger = new SharedLogger(logger);
+
+            // Start the Log file
+            logger.Info($"Starting CCDInfo v1.0.5");
+
+
             Console.WriteLine($"CCDInfo v1.0.5");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
@@ -103,396 +112,18 @@ namespace CCDInfo
             else
             {
                 // We're in display current config mode
-                WINDOWS_DISPLAY_CONFIG currentDisplayConfig = getWindowsDisplayConfig();
-                printCurrentDisplayConfigToScreen(currentDisplayConfig);
+                WINDOWS_DISPLAY_CONFIG currentDisplayConfig = WinLibrary.GetActiveConfig();
+                WinLibrary.PrintConfig(currentDisplayConfig);
             }
             Environment.Exit(0);
         }
 
-        static void updateAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong,string> currentAdapterMap)
-        {
-
-            Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
-
-            foreach (KeyValuePair<ulong, string>savedAdapter in savedDisplayConfig.displayAdapters)
-            {
-                foreach (KeyValuePair<ulong, string> currentAdapter in currentAdapterMap)
-                {
-                    if (currentAdapter.Value.Equals(savedAdapter.Value))
-                    {
-                        // we have found the new LUID Value for the same adapter
-                        // So we want to store it
-                        adapterOldToNewMap.Add(savedAdapter.Key,currentAdapter.Key);
-                    }
-                }
-            }
-
-            ulong newAdapterValue = 0;
-            // Update the paths with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayConfigPaths.Length; i++)
-            {
-                // Change the Path SourceInfo and TargetInfo AdapterIDs
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value];
-                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId.Value];
-                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-            // Update the modes with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayConfigModes.Length; i++)
-            {
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigModes[i].AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigModes[i].AdapterId.Value];
-                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue); 
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-            // Update the HDRInfo with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayHDRStates.Length; i++)
-            {
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayHDRStates[i].AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-        }
-
-        static WINDOWS_DISPLAY_CONFIG getWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
-        {
-
-            // Get the size of the largest Active Paths and Modes arrays
-            int pathCount = 0;
-            int modeCount = 0;
-            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
-            if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-                Environment.Exit(1);
-            }
-
-            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-            if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
-            {
-                // Screen changed in between GetDisplayConfigBufferSizes and QueryDisplayConfig, so we need to get buffer sizes again
-                // as per https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig 
-                err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-                    Environment.Exit(1);
-                }
-                paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-                modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-                err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-                if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
-                {
-                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} ERROR_INSUFFICIENT_BUFFER twice when trying to query all available displays");
-                }
-                else if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
-                    Environment.Exit(1);
-                }
-            }
-            else if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
-                Environment.Exit(1);
-            }
-
-            // Prepare the empty windows display config
-            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
-            windowsDisplayConfig.displayAdapters = new Dictionary<ulong, string>();
-            windowsDisplayConfig.displayHDRStates = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-
-            // Now cycle through the paths and grab the HDR state information
-            // and map the adapter name to adapter id
-            var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-            int hdrInfoCount = 0;
-            foreach (var path in paths)
-            {
-                // Get adapter ID for later
-                if (!windowsDisplayConfig.displayAdapters.ContainsKey(path.TargetInfo.AdapterId.Value))
-                {
-                    var adapterInfo = new DISPLAYCONFIG_ADAPTER_NAME();
-                    adapterInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME;
-                    adapterInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>();
-                    adapterInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                    adapterInfo.Header.Id = path.TargetInfo.Id;
-                    err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
-                    if (err == WIN32STATUS.ERROR_SUCCESS)
-                    {
-                        // Store it for later
-                        windowsDisplayConfig.displayAdapters.Add(path.TargetInfo.AdapterId.Value,adapterInfo.AdapterDevicePath);
-                    }
-                }                
-
-                // Get advanced HDR info
-                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                colorInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
-                    //Environment.Exit(1);
-                }
-
-                // get SDR white levels
-                var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
-                whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-                whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
-                whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                whiteLevelInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
-                    //Environment.Exit(1);
-                }
-
-
-                hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
-                hdrInfos[hdrInfoCount].AdapterId = path.TargetInfo.AdapterId;
-                hdrInfos[hdrInfoCount].Id = path.TargetInfo.Id;
-                hdrInfos[hdrInfoCount].AdvancedColorInfo = colorInfo;
-                hdrInfos[hdrInfoCount].SDRWhiteLevel = whiteLevelInfo;
-                hdrInfoCount++;
-            }
-
-
-            // Store the active paths and modes in our display config object
-            windowsDisplayConfig.displayConfigPaths = paths;
-            windowsDisplayConfig.displayConfigModes = modes;
-            windowsDisplayConfig.displayHDRStates = hdrInfos;
-
-            return windowsDisplayConfig;
-        }
-
         
-        private static LUID adapterValueToLUID (ulong adapterValue)
-        {
-            LUID luid = new LUID();
-            luid.LowPart = (uint)(adapterValue & uint.MaxValue);
-            luid.HighPart = (uint)(adapterValue >> 32);
-            return luid;
-        }
-
-        static void printCurrentDisplayConfigToScreen(WINDOWS_DISPLAY_CONFIG displayConfig)
-        {
-
-            WIN32STATUS err = WIN32STATUS.ERROR_SUCCESS;
-            foreach (var path in displayConfig.displayConfigPaths)
-            {
-                Console.WriteLine($"----++++==== Path ====++++----");
-
-                // get display source name
-                var sourceInfo = new DISPLAYCONFIG_SOURCE_DEVICE_NAME();
-                sourceInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-                sourceInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SOURCE_DEVICE_NAME>();
-                sourceInfo.Header.AdapterId = path.SourceInfo.AdapterId;
-                sourceInfo.Header.Id = path.SourceInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the source info for source adapter #{path.SourceInfo.AdapterId}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Display Source {sourceInfo.ViewGdiDeviceName} *******");
-                Console.WriteLine();
-
-                // get display target name
-                var targetInfo = new DISPLAYCONFIG_TARGET_DEVICE_NAME();
-                targetInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
-                targetInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>();
-                targetInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                targetInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref targetInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Display Target {targetInfo.MonitorFriendlyDeviceName} *******");
-                Console.WriteLine(" Connector Instance: " + targetInfo.ConnectorInstance);
-                Console.WriteLine(" EDID Manufacturer ID: " + targetInfo.EdidManufactureId);
-                Console.WriteLine(" EDID Product Code ID: " + targetInfo.EdidProductCodeId);
-                Console.WriteLine(" Flags Friendly Name from EDID: " + targetInfo.Flags.FriendlyNameFromEdid);
-                Console.WriteLine(" Flags Friendly Name Forced: " + targetInfo.Flags.FriendlyNameForced);
-                Console.WriteLine(" Flags EDID ID is Valid: " + targetInfo.Flags.EdidIdsValid);
-                Console.WriteLine(" Monitor Device Path: " + targetInfo.MonitorDevicePath);
-                Console.WriteLine(" Monitor Friendly Device Name: " + targetInfo.MonitorFriendlyDeviceName);
-                Console.WriteLine(" Output Technology: " + targetInfo.OutputTechnology);
-                Console.WriteLine();
-
-                // get display adapter name
-                var adapterInfo = new DISPLAYCONFIG_ADAPTER_NAME();
-                adapterInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME;
-                adapterInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>();
-                adapterInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                adapterInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the adapter name for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Adapter {adapterInfo.AdapterDevicePath} *******");
-                Console.WriteLine();
-
-
-                // get display target preferred mode
-                var targetPreferredInfo = new DISPLAYCONFIG_TARGET_PREFERRED_MODE();
-                targetPreferredInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE;
-                targetPreferredInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_TARGET_PREFERRED_MODE>();
-                targetPreferredInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                targetPreferredInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref targetPreferredInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the preferred target name for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Display Target Preferred Mode  *******");
-                Console.WriteLine(" Width: " + targetPreferredInfo.Width);
-                Console.WriteLine(" Height: " + targetPreferredInfo.Height);
-                Console.WriteLine($" Target Video Signal Info Active Size: ({targetPreferredInfo.TargetMode.TargetVideoSignalInfo.ActiveSize.Cx}x{targetPreferredInfo.TargetMode.TargetVideoSignalInfo.ActiveSize.Cy})");
-                Console.WriteLine($" Target Video Signal Info Total Size: ({targetPreferredInfo.TargetMode.TargetVideoSignalInfo.TotalSize.Cx}x{targetPreferredInfo.TargetMode.TargetVideoSignalInfo.TotalSize.Cy})");
-                Console.WriteLine(" Target Video Signal Info HSync Frequency: " + targetPreferredInfo.TargetMode.TargetVideoSignalInfo.HSyncFreq);
-                Console.WriteLine(" Target Video Signal Info VSync Frequency: " + targetPreferredInfo.TargetMode.TargetVideoSignalInfo.VSyncFreq);
-                Console.WriteLine(" Target Video Signal Info Pixel Rate: " + targetPreferredInfo.TargetMode.TargetVideoSignalInfo.PixelRate);
-                Console.WriteLine(" Target Video Signal Info Scan Line Ordering: " + targetPreferredInfo.TargetMode.TargetVideoSignalInfo.ScanLineOrdering);
-                Console.WriteLine(" Target Video Signal Info Video Standard: " + targetPreferredInfo.TargetMode.TargetVideoSignalInfo.VideoStandard);
-                Console.WriteLine();
-
-                // get display target base type
-                var targetBaseTypeInfo = new DISPLAYCONFIG_TARGET_BASE_TYPE();
-                targetBaseTypeInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_BASE_TYPE;
-                targetBaseTypeInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_TARGET_BASE_TYPE>();
-                targetBaseTypeInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                targetBaseTypeInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref targetBaseTypeInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target base type for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Target Base Type *******");
-                Console.WriteLine(" Base Output Technology: " + targetBaseTypeInfo.BaseOutputTechnology);
-                Console.WriteLine();
-
-                // get display support virtual resolution
-                var supportVirtResInfo = new DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION();
-                supportVirtResInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SUPPORT_VIRTUAL_RESOLUTION;
-                supportVirtResInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION>();
-                supportVirtResInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                supportVirtResInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref supportVirtResInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to find out the virtual resolution support for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
-                }
-
-                Console.WriteLine($"****** Investigating Target Supporting virtual resolution *******");
-                Console.WriteLine(" Virtual Resolution is Disabled: " + supportVirtResInfo.IsMonitorVirtualResolutionDisabled);
-                Console.WriteLine();
-
-
-                //get advanced color info
-                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                colorInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    /*Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);*/
-                }
-
-                Console.WriteLine($"****** Investigating Advanced Color Info *******");
-                Console.WriteLine(" Advanced Color Supported: " + colorInfo.AdvancedColorSupported);
-                Console.WriteLine(" Advanced Color Enabled  : " + colorInfo.AdvancedColorEnabled);
-                Console.WriteLine(" Advanced Color Force Disabled: " + colorInfo.AdvancedColorForceDisabled);
-                Console.WriteLine(" Bits per Color Channel: " + colorInfo.BitsPerColorChannel);
-                Console.WriteLine(" Color Encoding: " + colorInfo.ColorEncoding);
-                Console.WriteLine(" Wide Color Enforced: " + colorInfo.WideColorEnforced);
-                Console.WriteLine();
-
-                // get SDR white levels
-                var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
-                whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-                whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
-                whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                whiteLevelInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    /*Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);*/
-                }
-
-                Console.WriteLine($"****** Investigating SDR White Level  *******");
-                Console.WriteLine(" SDR White Level: " + whiteLevelInfo.SDRWhiteLevel);
-                Console.WriteLine();
-            }
-        }
-
         static void saveToFile(string filename)
         {
             Console.WriteLine($"ProfileRepository/SaveProfiles: Attempting to save the profiles repository to the {filename}.");
 
-            myDisplayConfig = getWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
+            myDisplayConfig = WinLibrary.GetActiveConfig();
 
             // Save the object to file!
             try
