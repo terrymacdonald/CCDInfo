@@ -74,8 +74,7 @@ namespace CCDInfo
                     {
                         Console.WriteLine($"ERROR - Couldn't save settings to the file {args[1]}");
                         Environment.Exit(1);
-                    }
-                    Environment.Exit(0);
+                    }                    
                 }
                 else if (args[0] == "load")
                 {
@@ -90,20 +89,120 @@ namespace CCDInfo
                         Environment.Exit(1);
                     }
                     loadFromFile(args[1]);
-                    Environment.Exit(0);
                 }
                 else if (args[0] == "help" || args[0] == "--help" || args[0] == "-h" || args[0] == "/?" || args[0] == "-?")
                 {
-                    Console.WriteLine($"CCDInfo is a little program to help test setting display layout and HDR settings in Windows 10 64-bit.\n");
+                    Console.WriteLine($"CCDInfo is a little program to help test setting display layout and HDR settings in Windows 10 64-bit and later.\n");
                     Console.WriteLine($"You can run it without any command line parameters, and it will print all the information it can find from the \nWindows Display CCD interface.\n");
                     Console.WriteLine($"You can also run it with 'CCDInfo save myfilename.cfg' and it will save the current display configuration into\nthe myfilename.cfg file.\n");
                     Console.WriteLine($"This is most useful when you subsequently use the 'CCDInfo load myfilename.cfg' command, as it will load the\ndisplay configuration from the myfilename.cfg file and make it live.");
                     Console.WriteLine($"In this way, you can make yourself a library of different cfg files with different display layouts, then use\nthe CCDInfo load command to swap between them.");
                     Environment.Exit(1);
                 }
-            }            
+            }
+            else
+            {
+                // We're in display current config mode
+                WINDOWS_DISPLAY_CONFIG currentDisplayConfig = getWindowsDisplayConfig();
+                printCurrentDisplayConfigToScreen(currentDisplayConfig);
+            }
+            Environment.Exit(0);
+        }
 
-            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
+        static void updateAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong,string> currentAdapterMap)
+        {
+
+            Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
+
+            foreach (KeyValuePair<ulong, string>savedAdapter in savedDisplayConfig.displayAdapters)
+            {
+                foreach (KeyValuePair<ulong, string> currentAdapter in currentAdapterMap)
+                {
+                    if (currentAdapter.Value.Equals(savedAdapter.Value))
+                    {
+                        // we have found the new LUID Value for the same adapter
+                        // So we want to store it
+                        adapterOldToNewMap.Add(savedAdapter.Key,currentAdapter.Key);
+                    }
+                }
+            }
+
+            ulong newAdapterValue = 0;
+            // Update the paths with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayConfigPaths.Length; i++)
+            {
+                // Change the Path SourceInfo and TargetInfo AdapterIDs
+                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value))
+                {
+                    // We get here if there is a matching adapter
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value];
+                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId.Value];
+                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
+                }
+                else
+                {
+                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                    newAdapterValue = currentAdapterMap.First().Key;
+                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
+                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
+                }
+            }
+
+            // Update the modes with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayConfigModes.Length; i++)
+            {
+                // Change the Mode AdapterID
+                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigModes[i].AdapterId.Value))
+                {
+                    // We get here if there is a matching adapter
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigModes[i].AdapterId.Value];
+                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue); 
+                }
+                else
+                {
+                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                    newAdapterValue = currentAdapterMap.First().Key;
+                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue);
+                }
+            }
+
+            // Update the HDRInfo with the current adapter id
+            for (int i = 0; i < savedDisplayConfig.displayHDRStates.Length; i++)
+            {
+                // Change the Mode AdapterID
+                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayHDRStates[i].AdapterId.Value))
+                {
+                    // We get here if there is a matching adapter
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdapterId.Value];
+                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId.Value];
+                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
+                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId.Value];
+                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
+                }
+                else
+                {
+                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                    newAdapterValue = currentAdapterMap.First().Key;
+                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
+                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
+                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
+                }
+            }
+
+        }
+
+        static WINDOWS_DISPLAY_CONFIG getWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
+        {
+
+            // Get the size of the largest Active Paths and Modes arrays
+            int pathCount = 0;
+            int modeCount = 0;
+            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
             {
                 Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
@@ -113,13 +212,120 @@ namespace CCDInfo
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
             err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-            if (err != WIN32STATUS.ERROR_SUCCESS)
+            if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
             {
-                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all avilable displays");
+                // Screen changed in between GetDisplayConfigBufferSizes and QueryDisplayConfig, so we need to get buffer sizes again
+                // as per https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig 
+                err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                    Environment.Exit(1);
+                }
+                paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+                modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+                err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
+                {
+                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} ERROR_INSUFFICIENT_BUFFER twice when trying to query all available displays");
+                }
+                else if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
+                    Environment.Exit(1);
+                }
+            }
+            else if (err != WIN32STATUS.ERROR_SUCCESS)
+            {
+                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
                 Environment.Exit(1);
             }
 
+            // Prepare the empty windows display config
+            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
+            windowsDisplayConfig.displayAdapters = new Dictionary<ulong, string>();
+            windowsDisplayConfig.displayHDRStates = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
+
+            // Now cycle through the paths and grab the HDR state information
+            // and map the adapter name to adapter id
+            var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
+            int hdrInfoCount = 0;
             foreach (var path in paths)
+            {
+                // Get adapter ID for later
+                if (!windowsDisplayConfig.displayAdapters.ContainsKey(path.TargetInfo.AdapterId.Value))
+                {
+                    var adapterInfo = new DISPLAYCONFIG_ADAPTER_NAME();
+                    adapterInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME;
+                    adapterInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>();
+                    adapterInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                    adapterInfo.Header.Id = path.TargetInfo.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
+                    if (err == WIN32STATUS.ERROR_SUCCESS)
+                    {
+                        // Store it for later
+                        windowsDisplayConfig.displayAdapters.Add(path.TargetInfo.AdapterId.Value,adapterInfo.AdapterDevicePath);
+                    }
+                }                
+
+                // Get advanced HDR info
+                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
+                colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+                colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
+                colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                colorInfo.Header.Id = path.TargetInfo.Id;
+                err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
+                    //Environment.Exit(1);
+                }
+
+                // get SDR white levels
+                var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
+                whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+                whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
+                whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
+                whiteLevelInfo.Header.Id = path.TargetInfo.Id;
+                err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
+                if (err != WIN32STATUS.ERROR_SUCCESS)
+                {
+                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
+                    //Environment.Exit(1);
+                }
+
+
+                hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
+                hdrInfos[hdrInfoCount].AdapterId = path.TargetInfo.AdapterId;
+                hdrInfos[hdrInfoCount].Id = path.TargetInfo.Id;
+                hdrInfos[hdrInfoCount].AdvancedColorInfo = colorInfo;
+                hdrInfos[hdrInfoCount].SDRWhiteLevel = whiteLevelInfo;
+                hdrInfoCount++;
+            }
+
+
+            // Store the active paths and modes in our display config object
+            windowsDisplayConfig.displayConfigPaths = paths;
+            windowsDisplayConfig.displayConfigModes = modes;
+            windowsDisplayConfig.displayHDRStates = hdrInfos;
+
+            return windowsDisplayConfig;
+        }
+
+        
+        private static LUID adapterValueToLUID (ulong adapterValue)
+        {
+            LUID luid = new LUID();
+            luid.LowPart = (uint)(adapterValue & uint.MaxValue);
+            luid.HighPart = (uint)(adapterValue >> 32);
+            return luid;
+        }
+
+        static void printCurrentDisplayConfigToScreen(WINDOWS_DISPLAY_CONFIG displayConfig)
+        {
+
+            WIN32STATUS err = WIN32STATUS.ERROR_SUCCESS;
+            foreach (var path in displayConfig.displayConfigPaths)
             {
                 Console.WriteLine($"----++++==== Path ====++++----");
 
@@ -250,8 +456,8 @@ namespace CCDInfo
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
+                    /*Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);*/
                 }
 
                 Console.WriteLine($"****** Investigating Advanced Color Info *******");
@@ -272,203 +478,14 @@ namespace CCDInfo
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
-                    Environment.Exit(1);
+                    /*Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
+                    Environment.Exit(1);*/
                 }
 
                 Console.WriteLine($"****** Investigating SDR White Level  *******");
                 Console.WriteLine(" SDR White Level: " + whiteLevelInfo.SDRWhiteLevel);
                 Console.WriteLine();
             }
-
-        }
-
-        static void updateAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong,string> currentAdapterMap)
-        {
-
-            Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
-
-            foreach (KeyValuePair<ulong, string>savedAdapter in savedDisplayConfig.displayAdapters)
-            {
-                foreach (KeyValuePair<ulong, string> currentAdapter in currentAdapterMap)
-                {
-                    if (currentAdapter.Value.Equals(savedAdapter.Value))
-                    {
-                        // we have found the new LUID Value for the same adapter
-                        // So we want to store it
-                        adapterOldToNewMap.Add(savedAdapter.Key,currentAdapter.Key);
-                    }
-                }
-            }
-
-            ulong newAdapterValue = 0;
-            // Update the paths with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayConfigPaths.Length; i++)
-            {
-                // Change the Path SourceInfo and TargetInfo AdapterIDs
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId.Value];
-                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId.Value];
-                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayConfigPaths[i].SourceInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayConfigPaths[i].TargetInfo.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-            // Update the modes with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayConfigModes.Length; i++)
-            {
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayConfigModes[i].AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayConfigModes[i].AdapterId.Value];
-                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue); 
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayConfigModes[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-            // Update the HDRInfo with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.displayHDRStates.Length; i++)
-            {
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.displayHDRStates[i].AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId.Value];
-                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    savedDisplayConfig.displayHDRStates[i].AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayHDRStates[i].AdvancedColorInfo.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.displayHDRStates[i].SDRWhiteLevel.Header.AdapterId = adapterValueToLUID(newAdapterValue);
-                }
-            }
-
-        }
-
-        static WINDOWS_DISPLAY_CONFIG getWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS)
-        {           
-
-            // Get the size of the largest Active Paths and Modes arrays
-            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(selector, out var pathCount, out var modeCount);
-            if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                Console.WriteLine($"ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-                Environment.Exit(1);
-            }
-
-            // Get the Active Paths and Modes in use now
-            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            err = CCDImport.QueryDisplayConfig(selector, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-            if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                Console.WriteLine($"ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to get the Display Configuration to save later");
-                Environment.Exit(1);
-            }
-
-            // Prepare the empty windows display config
-            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
-            windowsDisplayConfig.displayAdapters = new Dictionary<ulong, string>();
-            windowsDisplayConfig.displayHDRStates = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-
-            // Now cycle through the paths and grab the HDR state information
-            // and map the adapter name to adapter id
-            var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-            int hdrInfoCount = 0;
-            foreach (var path in paths)
-            {
-                // Map adapter ID if needed
-                if (!windowsDisplayConfig.displayAdapters.ContainsKey(path.TargetInfo.AdapterId.Value))
-                {
-                    var adapterInfo = new DISPLAYCONFIG_ADAPTER_NAME();
-                    adapterInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADAPTER_NAME;
-                    adapterInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_ADAPTER_NAME>();
-                    adapterInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                    adapterInfo.Header.Id = path.TargetInfo.Id;
-                    err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
-                    if (err == WIN32STATUS.ERROR_SUCCESS)
-                    {
-                        // Store it for later
-                        windowsDisplayConfig.displayAdapters.Add(path.TargetInfo.AdapterId.Value,adapterInfo.AdapterDevicePath);
-                    }
-                }                
-
-                // Get advanced HDR info
-                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                colorInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                colorInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the advanced color info for display #{path.TargetInfo.Id}");
-                    //Environment.Exit(1);
-                }
-
-                // get SDR white levels
-                var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
-                whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-                whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
-                whiteLevelInfo.Header.AdapterId = path.TargetInfo.AdapterId;
-                whiteLevelInfo.Header.Id = path.TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    //Console.WriteLine($"ERROR - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the SDR white level for display #{path.TargetInfo.Id}");
-                    //Environment.Exit(1);
-                }
-
-
-                hdrInfos[hdrInfoCount] = new ADVANCED_HDR_INFO_PER_PATH();
-                hdrInfos[hdrInfoCount].AdapterId = path.TargetInfo.AdapterId;
-                hdrInfos[hdrInfoCount].Id = path.TargetInfo.Id;
-                hdrInfos[hdrInfoCount].AdvancedColorInfo = colorInfo;
-                hdrInfos[hdrInfoCount].SDRWhiteLevel = whiteLevelInfo;
-                hdrInfoCount++;
-            }
-
-
-            // Store the active paths and modes in our display config object
-            windowsDisplayConfig.displayConfigPaths = paths;
-            windowsDisplayConfig.displayConfigModes = modes;
-            windowsDisplayConfig.displayHDRStates = hdrInfos;
-
-            return windowsDisplayConfig;
-        }
-
-        
-        private static LUID adapterValueToLUID (ulong adapterValue)
-        {
-            LUID luid = new LUID();
-            luid.LowPart = (uint)(adapterValue & uint.MaxValue);
-            luid.HighPart = (uint)(adapterValue >> 32);
-            return luid;
         }
 
         static void saveToFile(string filename)

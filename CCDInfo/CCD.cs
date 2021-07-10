@@ -90,7 +90,7 @@ namespace CCDInfo
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_MIRACAST = 15,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED = 16,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_VIRTUAL = 17,
-        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL = 0x80000000,
+        DISPLAYCONFIG_OUTPUT_TECHNOLOGY_public = 0x80000000,
         DISPLAYCONFIG_OUTPUT_TECHNOLOGY_FORCEUINT32 = 0xFFFFFFFF,
     }
 
@@ -98,7 +98,7 @@ namespace CCDInfo
     public enum DISPLAYCONFIG_TOPOLOGY_ID : uint
     {
         Zero = 0x0, 
-        DISPLAYCONFIG_TOPOLOGY_INTERNAL = 0x00000001,
+        DISPLAYCONFIG_TOPOLOGY_public = 0x00000001,
         DISPLAYCONFIG_TOPOLOGY_CLONE = 0x00000002,
         DISPLAYCONFIG_TOPOLOGY_EXTEND = 0x00000004,
         DISPLAYCONFIG_TOPOLOGY_EXTERNAL = 0x00000008,
@@ -148,12 +148,12 @@ namespace CCDInfo
     public enum SDC : uint
     {
         Zero = 0x0,
-        SDC_TOPOLOGY_INTERNAL = 0x00000001,
+        SDC_TOPOLOGY_public = 0x00000001,
         SDC_TOPOLOGY_CLONE = 0x00000002,
         SDC_TOPOLOGY_EXTEND = 0x00000004,
         SDC_TOPOLOGY_EXTERNAL = 0x00000008,
         SDC_TOPOLOGY_SUPPLIED = 0x00000010,
-        SDC_USE_DATABASE_CURRENT = (SDC_TOPOLOGY_INTERNAL | SDC_TOPOLOGY_CLONE | SDC_TOPOLOGY_EXTEND | SDC_TOPOLOGY_EXTERNAL),
+        SDC_USE_DATABASE_CURRENT = (SDC_TOPOLOGY_public | SDC_TOPOLOGY_CLONE | SDC_TOPOLOGY_EXTEND | SDC_TOPOLOGY_EXTERNAL),
         SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x00000020,
         SDC_VALIDATE = 0x00000040,
         SDC_APPLY = 0x00000080,
@@ -660,7 +660,7 @@ namespace CCDInfo
 
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_TARGET_PREFERRED_MODE : IEquatable<DISPLAYCONFIG_TARGET_PREFERRED_MODE>
+    public struct DISPLAYCONFIG_TARGET_PREFERRED_MODE : IEquatable<DISPLAYCONFIG_TARGET_PREFERRED_MODE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public uint Width;
@@ -682,7 +682,7 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct DISPLAYCONFIG_ADAPTER_NAME : IEquatable<DISPLAYCONFIG_ADAPTER_NAME>
+    public struct DISPLAYCONFIG_ADAPTER_NAME : IEquatable<DISPLAYCONFIG_ADAPTER_NAME>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
@@ -701,7 +701,7 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    internal struct DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION : IEquatable<DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION>
+    public struct DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION : IEquatable<DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public uint Value;
@@ -725,7 +725,7 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_SET_TARGET_PERSISTENCE : IEquatable<DISPLAYCONFIG_SET_TARGET_PERSISTENCE>
+    public struct DISPLAYCONFIG_SET_TARGET_PERSISTENCE : IEquatable<DISPLAYCONFIG_SET_TARGET_PERSISTENCE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public uint Value;
@@ -749,7 +749,7 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_TARGET_BASE_TYPE : IEquatable<DISPLAYCONFIG_TARGET_BASE_TYPE>
+    public struct DISPLAYCONFIG_TARGET_BASE_TYPE : IEquatable<DISPLAYCONFIG_TARGET_BASE_TYPE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         //[MarshalAs(UnmanagedType.U4)]
@@ -769,7 +769,7 @@ namespace CCDInfo
 
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE : IEquatable<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>
+    public struct DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE : IEquatable<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         public uint Value;
@@ -803,14 +803,16 @@ namespace CCDInfo
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct DISPLAYCONFIG_SDR_WHITE_LEVEL : IEquatable<DISPLAYCONFIG_SDR_WHITE_LEVEL>
+    public struct DISPLAYCONFIG_SDR_WHITE_LEVEL : IEquatable<DISPLAYCONFIG_SDR_WHITE_LEVEL>
     {
         public DISPLAYCONFIG_DEVICE_INFO_HEADER Header;
         // SDRWhiteLevel represents a multiplier for standard SDR white
         // peak value i.e. 80 nits represented as fixed point.
         // To get value in nits use the following conversion
         // SDRWhiteLevel in nits = (SDRWhiteLevel / 1000 ) * 80
-        public ulong SDRWhiteLevel;
+        // NOTE! Weirdly this is supposed to be a ulong, but there is an error in Win10 64-bit
+        // where it actually returns a uint! So had to engineer in a bug :(
+        public uint SDRWhiteLevel;
 
         public bool Equals(DISPLAYCONFIG_SDR_WHITE_LEVEL other)
             => Header.Equals(other.Header) &&
