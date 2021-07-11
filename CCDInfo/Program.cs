@@ -62,7 +62,7 @@ namespace CCDInfo
             logger.Info($"Starting CCDInfo v1.0.5");
 
             
-            Console.WriteLine($"CCDInfo v1.0.5");
+            Console.WriteLine($"\nCCDInfo v1.0.5");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -96,6 +96,20 @@ namespace CCDInfo
                     }
                     loadFromFile(args[1]);
                 }
+                else if (args[0] == "possible")
+                {
+                    if (args.Length != 2)
+                    {
+                        Console.WriteLine($"ERROR - You need to provide a filename from which we will check if the display settings are possible");
+                        Environment.Exit(1);
+                    }
+                    if (!File.Exists(args[1]))
+                    {
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to load settings from it");
+                        Environment.Exit(1);
+                    }
+                    PossibleFromFile(args[1]);
+                }
                 else if (args[0] == "currentids")
                 {
                     Console.WriteLine("The current display identifiers are:");
@@ -117,8 +131,13 @@ namespace CCDInfo
                     Console.WriteLine($"CCDInfo is a little program to help test setting display layout and HDR settings in Windows 10 64-bit and later.\n");
                     Console.WriteLine($"You can run it without any command line parameters, and it will print all the information it can find from the \nWindows Display CCD interface.\n");
                     Console.WriteLine($"You can also run it with 'CCDInfo save myfilename.cfg' and it will save the current display configuration into\nthe myfilename.cfg file.\n");
-                    Console.WriteLine($"This is most useful when you subsequently use the 'CCDInfo load myfilename.cfg' command, as it will load the\ndisplay configuration from the myfilename.cfg file and make it live.");
-                    Console.WriteLine($"In this way, you can make yourself a library of different cfg files with different display layouts, then use\nthe CCDInfo load command to swap between them.");
+                    Console.WriteLine($"This is most useful when you subsequently use the 'CCDInfo load myfilename.cfg' command, as it will load the\ndisplay configuration from the myfilename.cfg file and make it live. In this way, you can make yourself a library\nof different cfg files with different display layouts, then use the CCDInfo load command to swap between them.\n\n");
+                    Console.WriteLine($"Valid commands:\n");
+                    Console.WriteLine($"\t'CCDInfo' will print information about your current display setting.");
+                    Console.WriteLine($"\t'CCDInfo save myfilename.cfg' will save your current display setting to the myfilename.cfg file.");
+                    Console.WriteLine($"\t'CCDInfo load myfilename.cfg' will load and apply the display setting in the myfilename.cfg file.");
+                    Console.WriteLine($"\t'CCDInfo possible myfilename.cfg' will test the display setting in the myfilename.cfg file to see\n\t\tif it is possible.");
+                    Console.WriteLine($"\nUse DisplayMagician to store display settings for each game you have. https://github.com/terrymacdonald/DisplayMagician\n");
                     Environment.Exit(1);
                 }
             }
@@ -194,7 +213,64 @@ namespace CCDInfo
                     Console.WriteLine($"ProfileRepository/LoadProfiles: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
 
-                WinLibrary.GetLibrary().SetActiveConfig(myDisplayConfig);
+                if (WinLibrary.GetLibrary().IsPossibleConfig(myDisplayConfig))
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Applying display config");
+                    WinLibrary.GetLibrary().SetActiveConfig(myDisplayConfig);
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Display config successfully applied");
+                }
+                else
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Cannot apply the display config as it is not currently possible to use it");
+                }
+                
+
+            }
+            else
+            {
+                Console.WriteLine($"ProfileRepository/LoadProfiles: The {filename} profile JSON file exists but is empty! So we're going to treat it as if it didn't exist.");
+            }
+        }
+
+        static void PossibleFromFile(string filename)
+        {
+            string json = "";
+            try
+            {
+                json = File.ReadAllText(filename, Encoding.Unicode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ProfileRepository/LoadProfiles: Tried to read the JSON file {filename} to memory but File.ReadAllTextthrew an exception.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    myDisplayConfig = JsonConvert.DeserializeObject<WINDOWS_DISPLAY_CONFIG>(json, new JsonSerializerSettings
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Ignore,
+                        NullValueHandling = NullValueHandling.Ignore,
+                        DefaultValueHandling = DefaultValueHandling.Include,
+                        TypeNameHandling = TypeNameHandling.Auto,
+                        ObjectCreationHandling = ObjectCreationHandling.Replace
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                }
+
+                if (WinLibrary.GetLibrary().IsPossibleConfig(myDisplayConfig))
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: The display setting in {filename} is possible to apply on this computer right now.");
+                }
+                else
+                {
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: The {filename} file contains a display setting that will NOT work on this computer right now.");
+                    Console.WriteLine($"ProfileRepository/LoadProfiles: This may be because the required screens are turned off, or some other change has occurred on the PC.");
+                }
 
             }
             else

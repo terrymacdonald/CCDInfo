@@ -67,8 +67,6 @@ namespace DisplayMagicianShared.Windows
         static WinLibrary() { }
         public WinLibrary()
         {
-            WIN32STATUS err = WIN32STATUS.ERROR_GEN_FAILURE;
-
             SharedLogger.logger.Trace("WinLibrary/WinLibrary: Intialising Windows CCD library interface");
             _initialised = true;
             SharedLogger.logger.Trace("WinLibrary/WinLibrary: ADL2 library was initialised successfully");
@@ -628,12 +626,55 @@ namespace DisplayMagicianShared.Windows
 
         public bool IsActiveConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
         {
-            return true;
+            // Get the current windows display configs to compare to the one we loaded
+            WINDOWS_DISPLAY_CONFIG currentWindowsDisplayConfig = GetWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
+
+            // Check whether the display config is in use now
+            Console.WriteLine($"ProfileRepository/LoadProfiles: Checking whether the display configuration is already being used.");
+            if (displayConfig.Equals(currentWindowsDisplayConfig))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+            
         }
 
-        public bool IsValidConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
+        public bool IsPossibleConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
         {
-            return true;
+            // Get the all possible windows display configs
+            WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = GetWindowsDisplayConfig(QDC.QDC_ALL_PATHS);
+
+            // Firstly check that the Adapter Names are still currently available (i.e. the adapter hasn't been replaced).
+            foreach (string savedAdapterName in displayConfig.displayAdapters.Values)
+            {
+                // If there is even one of the saved adapters that has changed, then it's no longer possible
+                // to use this display config!
+                if (!allWindowsDisplayConfig.displayAdapters.Values.Contains(savedAdapterName))
+                {
+                    return false;
+                }
+            }
+
+            // Now we go through the Paths to update the LUIDs as per Soroush's suggestion
+            PatchAdapterIDs(ref displayConfig, allWindowsDisplayConfig.displayAdapters);
+
+            Console.WriteLine($"ProfileRepository/LoadProfiles: Testing whether the display configuration is valid (allowing tweaks).");
+            // Test whether a specified display configuration is supported on the computer                    
+            uint myPathsCount = (uint)displayConfig.displayConfigPaths.Length;
+            uint myModesCount = (uint)displayConfig.displayConfigModes.Length;
+            WIN32STATUS err = CCDImport.SetDisplayConfig(myPathsCount, displayConfig.displayConfigPaths, myModesCount, displayConfig.displayConfigModes, SDC.DISPLAYMAGICIAN_VALIDATE);
+            if (err == WIN32STATUS.ERROR_SUCCESS)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+
         }
 
         public List<string> GetCurrentDisplayIdentifiers()
