@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.0.5");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.0.6");
 
             
-            Console.WriteLine($"\nCCDInfo v1.0.5");
+            Console.WriteLine($"\nCCDInfo v1.0.6");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -127,6 +127,12 @@ namespace CCDInfo
                         SharedLogger.logger.Info($@"{displayId}");
                     }
                 }
+                else if (args[0] == "print")
+                {
+                    SharedLogger.logger.Debug($"CCDInfo/Main: Attempting to show information about the current display settings as no command was provided");
+                    Console.WriteLine(WinLibrary.GetLibrary().PrintActiveConfig());
+
+                }
                 else if (args[0] == "help" || args[0] == "--help" || args[0] == "-h" || args[0] == "/?" || args[0] == "-?")
                 {
                     SharedLogger.logger.Debug($"CCDInfo/Main: Showing help as help command was provided");
@@ -143,9 +149,10 @@ namespace CCDInfo
             }
             else
             {
-                SharedLogger.logger.Debug($"CCDInfo/Main: Attempting to show information about the current display settings as no command was provided");
-                // We're in display current config mode
-                Console.WriteLine(WinLibrary.GetLibrary().PrintActiveConfig());
+                SharedLogger.logger.Debug($"CCDInfo/Main: Showing help as an invalid command was provided");
+                showHelp();
+                Console.WriteLine("*** ERROR - Invalid command line parameter provided! ***\n");
+                Environment.Exit(1);
             }
             Console.WriteLine();
             Environment.Exit(0);
@@ -154,14 +161,14 @@ namespace CCDInfo
         static void showHelp()
         {
             Console.WriteLine($"CCDInfo is a little program to help test setting display layout and HDR settings in Windows 10 64-bit and later.\n");
-            Console.WriteLine($"You can run it without any command line parameters, and it will print all the information it can find from the \nWindows Display CCD interface.\n");
+            Console.WriteLine($"You can run it with 'CCDInfo print', and it will print all the information it can find from the \nWindows Display CCD interface.\n");
             Console.WriteLine($"You can also run it with 'CCDInfo save myfilename.cfg' and it will save the current display configuration into\nthe myfilename.cfg file.\n");
             Console.WriteLine($"This is most useful when you subsequently use the 'CCDInfo load myfilename.cfg' command, as it will load the\ndisplay configuration from the myfilename.cfg file and make it live. In this way, you can make yourself a library\nof different cfg files with different display layouts, then use the CCDInfo load command to swap between them.\n\n");
             Console.WriteLine($"Valid commands:\n");
-            Console.WriteLine($"\t'CCDInfo' will print information about your current display setting.");
+            Console.WriteLine($"\t'CCDInfo print' will print information about your current display setting.");
             Console.WriteLine($"\t'CCDInfo save myfilename.cfg' will save your current display setting to the myfilename.cfg file.");
             Console.WriteLine($"\t'CCDInfo load myfilename.cfg' will load and apply the display setting in the myfilename.cfg file.");
-            Console.WriteLine($"\t'CCDInfo possible myfilename.cfg' will test the display setting in the myfilename.cfg file to see\n\t\tif it is possible.");
+            Console.WriteLine($"\t'CCDInfo possible myfilename.cfg' will test the display setting in the myfilename.cfg file to see\n\t\tif it is possible to use that display profile now.");
             Console.WriteLine($"\nUse DisplayMagician to store display settings for each game you have. https://github.com/terrymacdonald/DisplayMagician\n");
         }
 
