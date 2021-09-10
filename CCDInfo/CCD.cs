@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace DisplayMagicianShared.Windows
 {
-   
+
     public enum WIN32STATUS : uint
     {
         ERROR_SUCCESS = 0,
@@ -48,7 +48,7 @@ namespace DisplayMagicianShared.Windows
     [Flags]
     public enum DISPLAYCONFIG_SCALING : uint
     {
-        Zero = 0, 
+        Zero = 0,
         DISPLAYCONFIG_SCALING_IDENTITY = 1,
         DISPLAYCONFIG_SCALING_CENTERED = 2,
         DISPLAYCONFIG_SCALING_STRETCHED = 3,
@@ -61,7 +61,7 @@ namespace DisplayMagicianShared.Windows
     [Flags]
     public enum DISPLAYCONFIG_ROTATION : uint
     {
-        Zero = 0, 
+        Zero = 0,
         DISPLAYCONFIG_ROTATION_IDENTITY = 1,
         DISPLAYCONFIG_ROTATION_ROTATE90 = 2,
         DISPLAYCONFIG_ROTATION_ROTATE180 = 3,
@@ -97,7 +97,7 @@ namespace DisplayMagicianShared.Windows
     [Flags]
     public enum DISPLAYCONFIG_TOPOLOGY_ID : uint
     {
-        Zero = 0x0, 
+        Zero = 0x0,
         DISPLAYCONFIG_TOPOLOGY_public = 0x00000001,
         DISPLAYCONFIG_TOPOLOGY_CLONE = 0x00000002,
         DISPLAYCONFIG_TOPOLOGY_EXTEND = 0x00000004,
@@ -237,7 +237,7 @@ namespace DisplayMagicianShared.Windows
         PalN = 15,
         PalNc = 16,
         SecamB = 17,
-        SecamD = 18,
+        SecNVIDIA = 18,
         SecamG = 19,
         SecamH = 20,
         SecamK = 21,
@@ -262,6 +262,8 @@ namespace DisplayMagicianShared.Windows
         public LUID AdapterId;
         public uint Id;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_DEVICE_INFO_HEADER other && this.Equals(other);
+
         public bool Equals(DISPLAYCONFIG_DEVICE_INFO_HEADER other)
             => Type == other.Type &&
                 Size == other.Size &&
@@ -273,7 +275,9 @@ namespace DisplayMagicianShared.Windows
             return (Type, Size, AdapterId, Id).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_DEVICE_INFO_HEADER lhs, DISPLAYCONFIG_DEVICE_INFO_HEADER rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_DEVICE_INFO_HEADER lhs, DISPLAYCONFIG_DEVICE_INFO_HEADER rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -291,6 +295,8 @@ namespace DisplayMagicianShared.Windows
         public bool WideColorEnforced => (Value & 0x4) == 0x4;
         public bool AdvancedColorForceDisabled => (Value & 0x8) == 0x8;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO other && this.Equals(other);
+
         public bool Equals(DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO other)
             => Header.Equals(other.Header) &&
                 Value == other.Value &&
@@ -302,7 +308,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Value, ColorEncoding, BitsPerColorChannel).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO lhs, DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO lhs, DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -311,6 +319,7 @@ namespace DisplayMagicianShared.Windows
         public int X;
         public int Y;
 
+        public override bool Equals(object obj) => obj is POINTL other && this.Equals(other);
         public bool Equals(POINTL other)
             => X == other.X &&
                Y == other.Y;
@@ -320,7 +329,9 @@ namespace DisplayMagicianShared.Windows
             return (X, Y).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(POINTL lhs, POINTL rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(POINTL lhs, POINTL rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -331,6 +342,7 @@ namespace DisplayMagicianShared.Windows
 
         public ulong Value => ((ulong)HighPart << 32) | LowPart;
 
+        public override bool Equals(object obj) => obj is LUID other && this.Equals(other);
         public bool Equals(LUID other)
             => LowPart == other.LowPart &&
                 HighPart == other.HighPart;
@@ -339,6 +351,10 @@ namespace DisplayMagicianShared.Windows
         {
             return (LowPart, HighPart).GetHashCode();
         }
+
+        public static bool operator ==(LUID lhs, LUID rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(LUID lhs, LUID rhs) => !(lhs == rhs);
 
         public override string ToString() => Value.ToString();
     }
@@ -351,6 +367,7 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_PIXELFORMAT PixelFormat;
         public POINTL Position;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SOURCE_MODE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SOURCE_MODE other)
             => Width == other.Width &&
                 Height == other.Height &&
@@ -361,6 +378,9 @@ namespace DisplayMagicianShared.Windows
         {
             return (Width, Height, PixelFormat, Position).GetHashCode();
         }
+        public static bool operator ==(DISPLAYCONFIG_SOURCE_MODE lhs, DISPLAYCONFIG_SOURCE_MODE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SOURCE_MODE lhs, DISPLAYCONFIG_SOURCE_MODE rhs) => !(lhs == rhs);
 
     }
 
@@ -370,6 +390,7 @@ namespace DisplayMagicianShared.Windows
         public uint Numerator;
         public uint Denominator;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_RATIONAL other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_RATIONAL other)
             => Numerator == other.Numerator &&
                 Denominator == other.Denominator;
@@ -378,6 +399,9 @@ namespace DisplayMagicianShared.Windows
         {
             return (Numerator, Denominator).GetHashCode();
         }
+        public static bool operator ==(DISPLAYCONFIG_RATIONAL lhs, DISPLAYCONFIG_RATIONAL rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_RATIONAL lhs, DISPLAYCONFIG_RATIONAL rhs) => !(lhs == rhs);
 
         public override string ToString() => Numerator + " / " + Denominator;
     }
@@ -388,6 +412,7 @@ namespace DisplayMagicianShared.Windows
         public uint Cx;
         public uint Cy;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_2DREGION other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_2DREGION other)
             => Cx == other.Cx &&
                Cy == other.Cy;
@@ -397,7 +422,9 @@ namespace DisplayMagicianShared.Windows
             return (Cx, Cy).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_2DREGION lhs, DISPLAYCONFIG_2DREGION rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_2DREGION lhs, DISPLAYCONFIG_2DREGION rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -407,6 +434,7 @@ namespace DisplayMagicianShared.Windows
         public RECTL DesktopImageRegion;
         public RECTL DesktopImageClip;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_DESKTOP_IMAGE_INFO other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_DESKTOP_IMAGE_INFO other)
             => PathSourceSize.Equals(other.PathSourceSize) &&
                DesktopImageRegion.Equals(other.DesktopImageRegion) &&
@@ -417,7 +445,9 @@ namespace DisplayMagicianShared.Windows
             return (PathSourceSize, DesktopImageRegion, DesktopImageClip).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_DESKTOP_IMAGE_INFO lhs, DISPLAYCONFIG_DESKTOP_IMAGE_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_DESKTOP_IMAGE_INFO lhs, DISPLAYCONFIG_DESKTOP_IMAGE_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -431,6 +461,7 @@ namespace DisplayMagicianShared.Windows
         public D3D_VIDEO_SIGNAL_STANDARD VideoStandard;
         public DISPLAYCONFIG_SCANLINE_ORDERING ScanLineOrdering;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_VIDEO_SIGNAL_INFO other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_VIDEO_SIGNAL_INFO other)
             => PixelRate == other.PixelRate &&
                 HSyncFreq.Equals(other.HSyncFreq) &&
@@ -445,7 +476,9 @@ namespace DisplayMagicianShared.Windows
             return (PixelRate, HSyncFreq, VSyncFreq, ActiveSize, TotalSize, VideoStandard, ScanLineOrdering).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_VIDEO_SIGNAL_INFO lhs, DISPLAYCONFIG_VIDEO_SIGNAL_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_VIDEO_SIGNAL_INFO lhs, DISPLAYCONFIG_VIDEO_SIGNAL_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -453,6 +486,7 @@ namespace DisplayMagicianShared.Windows
     {
         public DISPLAYCONFIG_VIDEO_SIGNAL_INFO TargetVideoSignalInfo;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_TARGET_MODE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_TARGET_MODE other)
             => TargetVideoSignalInfo.Equals(other.TargetVideoSignalInfo);
 
@@ -461,8 +495,10 @@ namespace DisplayMagicianShared.Windows
             return (TargetVideoSignalInfo).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
-    }    
+        public static bool operator ==(DISPLAYCONFIG_TARGET_MODE lhs, DISPLAYCONFIG_TARGET_MODE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_TARGET_MODE lhs, DISPLAYCONFIG_TARGET_MODE rhs) => !(lhs == rhs);
+    }
 
     [StructLayout(LayoutKind.Explicit)]
     public struct DISPLAYCONFIG_PATH_SOURCE_INFO : IEquatable<DISPLAYCONFIG_PATH_SOURCE_INFO>
@@ -480,9 +516,10 @@ namespace DisplayMagicianShared.Windows
         [FieldOffset(16)]
         public DISPLAYCONFIG_SOURCE_FLAGS StatusFlags;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_PATH_SOURCE_INFO other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_PATH_SOURCE_INFO other)
             => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after a reboot.
-                Id == other.Id && 
+               //Id == other.Id &&  // Removed the ID from the list as the Display ID it maps to will change after a switch from surround to non-surround profile
                 ModeInfoIdx == other.ModeInfoIdx &&
                 StatusFlags.Equals(other.StatusFlags);
 
@@ -492,7 +529,9 @@ namespace DisplayMagicianShared.Windows
             return (ModeInfoIdx, Id, StatusFlags).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_PATH_SOURCE_INFO lhs, DISPLAYCONFIG_PATH_SOURCE_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_PATH_SOURCE_INFO lhs, DISPLAYCONFIG_PATH_SOURCE_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -523,6 +562,7 @@ namespace DisplayMagicianShared.Windows
         DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_PATH = 0x00000008,
         DISPLAYCONFIG_TARGET_FORCED_AVAILABILITY_SYSTEM = 0x00000010,
         DISPLAYCONFIG_TARGET_IS_HMD = 0x00000020,*/
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_PATH_TARGET_INFO other && this.Equals(other);
 
         public bool Equals(DISPLAYCONFIG_PATH_TARGET_INFO other)
             => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
@@ -541,7 +581,9 @@ namespace DisplayMagicianShared.Windows
             return (AdapterId, Id, ModeInfoIdx, OutputTechnology, Rotation, Scaling, RefreshRate, ScanLineOrdering, TargetAvailable, StatusFlags).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_PATH_TARGET_INFO lhs, DISPLAYCONFIG_PATH_TARGET_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_PATH_TARGET_INFO lhs, DISPLAYCONFIG_PATH_TARGET_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -551,6 +593,7 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_PATH_TARGET_INFO TargetInfo;
         public uint Flags;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_PATH_INFO other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_PATH_INFO other)
             => SourceInfo.Equals(other.SourceInfo) &&
                TargetInfo.Equals(other.TargetInfo) &&
@@ -561,7 +604,9 @@ namespace DisplayMagicianShared.Windows
             return (SourceInfo, TargetInfo, Flags).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_PATH_INFO lhs, DISPLAYCONFIG_PATH_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_PATH_INFO lhs, DISPLAYCONFIG_PATH_INFO rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Explicit)]
@@ -574,7 +619,7 @@ namespace DisplayMagicianShared.Windows
         public uint Id;
 
         [FieldOffset(8)]
-        public LUID AdapterId; 
+        public LUID AdapterId;
 
         // These 3 fields are all a C union in wingdi.dll
         [FieldOffset(16)]
@@ -586,6 +631,7 @@ namespace DisplayMagicianShared.Windows
         [FieldOffset(16)]
         public DISPLAYCONFIG_DESKTOP_IMAGE_INFO DesktopImageInfo;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_MODE_INFO other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_MODE_INFO other)
         {
             if (InfoType != other.InfoType)
@@ -595,12 +641,13 @@ namespace DisplayMagicianShared.Windows
                 Id == other.Id &&
                 TargetMode.Equals(other.TargetMode))
                 return true;
-            
+
             if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE &&
-                Id == other.Id &&
+                //Id == other.Id && // Disabling this check as as the Display ID it maps to will change after a switch from surround to non-surround profile, ruining the equality match
+                // Only seems to be a problem with the DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE options weirdly enough!
                 SourceMode.Equals(other.SourceMode))
                 return true;
-            
+
             if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_DESKTOP_IMAGE &&
                 Id == other.Id &&
                 DesktopImageInfo.Equals(other.DesktopImageInfo))
@@ -608,7 +655,7 @@ namespace DisplayMagicianShared.Windows
 
             return false;
         }
-            
+
 
         public override int GetHashCode()
         {
@@ -625,9 +672,11 @@ namespace DisplayMagicianShared.Windows
             return (InfoType, Id, TargetMode, SourceMode, DesktopImageInfo).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_MODE_INFO lhs, DISPLAYCONFIG_MODE_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_MODE_INFO lhs, DISPLAYCONFIG_MODE_INFO rhs) => !(lhs == rhs);
     }
-   
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct DISPLAYCONFIG_SOURCE_DEVICE_NAME : IEquatable<DISPLAYCONFIG_SOURCE_DEVICE_NAME>
     {
@@ -635,6 +684,7 @@ namespace DisplayMagicianShared.Windows
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string ViewGdiDeviceName;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SOURCE_DEVICE_NAME other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SOURCE_DEVICE_NAME other)
             => Header.Equals(other.Header) &&
                ViewGdiDeviceName == other.ViewGdiDeviceName;
@@ -644,7 +694,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, ViewGdiDeviceName).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_SOURCE_DEVICE_NAME lhs, DISPLAYCONFIG_SOURCE_DEVICE_NAME rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SOURCE_DEVICE_NAME lhs, DISPLAYCONFIG_SOURCE_DEVICE_NAME rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -652,6 +704,7 @@ namespace DisplayMagicianShared.Windows
     {
         public uint Value;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS other)
             => Value == other.Value;
 
@@ -664,7 +717,9 @@ namespace DisplayMagicianShared.Windows
             return Value.GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS lhs, DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS lhs, DISPLAYCONFIG_TARGET_DEVICE_NAME_FLAGS rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -681,6 +736,7 @@ namespace DisplayMagicianShared.Windows
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string MonitorDevicePath;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_TARGET_DEVICE_NAME other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_TARGET_DEVICE_NAME other)
             => Header.Equals(other.Header) &&
                Flags.Equals(other.Flags) &&
@@ -696,7 +752,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Flags, OutputTechnology, EdidManufactureId, EdidProductCodeId, ConnectorInstance, MonitorFriendlyDeviceName, MonitorDevicePath).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_TARGET_DEVICE_NAME lhs, DISPLAYCONFIG_TARGET_DEVICE_NAME rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_TARGET_DEVICE_NAME lhs, DISPLAYCONFIG_TARGET_DEVICE_NAME rhs) => !(lhs == rhs);
     }
 
 
@@ -708,6 +766,7 @@ namespace DisplayMagicianShared.Windows
         public uint Height;
         public DISPLAYCONFIG_TARGET_MODE TargetMode;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_TARGET_PREFERRED_MODE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_TARGET_PREFERRED_MODE other)
             => Header.Equals(other.Header) &&
                Width == other.Width &&
@@ -719,7 +778,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Width, Height, TargetMode).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_TARGET_PREFERRED_MODE lhs, DISPLAYCONFIG_TARGET_PREFERRED_MODE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_TARGET_PREFERRED_MODE lhs, DISPLAYCONFIG_TARGET_PREFERRED_MODE rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -729,6 +790,7 @@ namespace DisplayMagicianShared.Windows
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string AdapterDevicePath;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_ADAPTER_NAME other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_ADAPTER_NAME other)
             => Header.Equals(other.Header) &&
                AdapterDevicePath == other.AdapterDevicePath;
@@ -738,7 +800,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, AdapterDevicePath).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_ADAPTER_NAME lhs, DISPLAYCONFIG_ADAPTER_NAME rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_ADAPTER_NAME lhs, DISPLAYCONFIG_ADAPTER_NAME rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -752,6 +816,7 @@ namespace DisplayMagicianShared.Windows
             get => (Value & 0x1) == 0x1;
         }
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION other)
             => Header.Equals(other.Header) &&
                Value == other.Value;
@@ -761,7 +826,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Value).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION lhs, DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION lhs, DISPLAYCONFIG_SUPPORT_VIRTUAL_RESOLUTION rhs) => !(lhs == rhs);
 
     }
 
@@ -776,6 +843,7 @@ namespace DisplayMagicianShared.Windows
             get => (Value & 0x1) == 0x1;
         }
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SET_TARGET_PERSISTENCE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SET_TARGET_PERSISTENCE other)
             => Header.Equals(other.Header) &&
                Value == other.Value;
@@ -785,7 +853,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Value).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_SET_TARGET_PERSISTENCE lhs, DISPLAYCONFIG_SET_TARGET_PERSISTENCE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SET_TARGET_PERSISTENCE lhs, DISPLAYCONFIG_SET_TARGET_PERSISTENCE rhs) => !(lhs == rhs);
 
     }
 
@@ -796,6 +866,7 @@ namespace DisplayMagicianShared.Windows
         //[MarshalAs(UnmanagedType.U4)]
         public DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY BaseOutputTechnology;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_TARGET_BASE_TYPE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_TARGET_BASE_TYPE other)
             => Header.Equals(other.Header) &&
                BaseOutputTechnology == other.BaseOutputTechnology;
@@ -805,7 +876,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, BaseOutputTechnology).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_TARGET_BASE_TYPE lhs, DISPLAYCONFIG_TARGET_BASE_TYPE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_TARGET_BASE_TYPE lhs, DISPLAYCONFIG_TARGET_BASE_TYPE rhs) => !(lhs == rhs);
     }
 
 
@@ -819,7 +892,7 @@ namespace DisplayMagicianShared.Windows
         {
             get => (Value & 0x1) == 0x1;
             set
-            { 
+            {
                 if (value)
                 {
                     Value = 0x1;
@@ -831,6 +904,7 @@ namespace DisplayMagicianShared.Windows
             }
         }
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE other)
             => Header.Equals(other.Header) &&
                Value == other.Value;
@@ -840,7 +914,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, Value).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE lhs, DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE lhs, DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -855,6 +931,7 @@ namespace DisplayMagicianShared.Windows
         // where it actually returns a uint! So had to engineer in a bug :(
         public uint SDRWhiteLevel;
 
+        public override bool Equals(object obj) => obj is DISPLAYCONFIG_SDR_WHITE_LEVEL other && this.Equals(other);
         public bool Equals(DISPLAYCONFIG_SDR_WHITE_LEVEL other)
             => Header.Equals(other.Header) &&
                SDRWhiteLevel == other.SDRWhiteLevel;
@@ -865,7 +942,9 @@ namespace DisplayMagicianShared.Windows
             return (Header, SDRWhiteLevel).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(DISPLAYCONFIG_SDR_WHITE_LEVEL lhs, DISPLAYCONFIG_SDR_WHITE_LEVEL rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAYCONFIG_SDR_WHITE_LEVEL lhs, DISPLAYCONFIG_SDR_WHITE_LEVEL rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -876,6 +955,7 @@ namespace DisplayMagicianShared.Windows
         public int Right;
         public int Bottom;
 
+        public override bool Equals(object obj) => obj is RECTL other && this.Equals(other);
         public bool Equals(RECTL other)
             => Left == other.Left &&
                Top == other.Top &&
@@ -887,7 +967,9 @@ namespace DisplayMagicianShared.Windows
             return (Left, Top, Right, Bottom).GetHashCode();
         }
 
-        //public override string ToString() => $"{type.ToString("G")}";
+        public static bool operator ==(RECTL lhs, RECTL rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(RECTL lhs, RECTL rhs) => !(lhs == rhs);
     }
 
 
