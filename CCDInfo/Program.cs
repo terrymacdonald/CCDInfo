@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.0.8");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.0.9");
 
             
-            Console.WriteLine($"\nCCDInfo v1.0.8");
+            Console.WriteLine($"\nCCDInfo v1.0.9");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -104,6 +104,31 @@ namespace CCDInfo
                         Environment.Exit(1);
                     }
                     possibleFromFile(args[1]);
+                }
+                else if (args[0] == "equal")
+                {
+                    SharedLogger.logger.Debug($"CCDInfo/Main: The equal command was provided");
+                    if (args.Length != 3)
+                    {
+                        Console.WriteLine($"ERROR - You need to provide two filenames in order for us to see if they are equal.");
+                        Console.WriteLine($"        Equal means they are exactly the same.");
+                        SharedLogger.logger.Error($"CCDInfo/Main: ERROR - You need to provide two filenames in order for us to see if they are equal.");
+                        Environment.Exit(1);
+                    }
+                    SharedLogger.logger.Debug($"CCDInfo/Main: showing if {args[1]} and {args[2]} are both a valid display config files as equals command was provided");
+                    if (!File.Exists(args[1]))
+                    {
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                        SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                        Environment.Exit(1);
+                    }
+                    if (!File.Exists(args[2]))
+                    {
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[2]} to check the settings from it");
+                        SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[2]} to check the settings from it");
+                        Environment.Exit(1);
+                    }
+                    equalFromFiles(args[1], args[2]);
                 }
                 else if (args[0] == "currentids")
                 {
@@ -337,6 +362,92 @@ namespace CCDInfo
                 Console.WriteLine($"CCDInfo/possibleFromFile: The {filename} profile JSON file exists but is empty! So we're going to treat it as if it didn't exist.");
             }
         }
+
+        static void equalFromFiles(string filename, string otherFilename)
+        {
+            string json = "";
+            string otherJson = "";
+            WINDOWS_DISPLAY_CONFIG displayConfig = new WINDOWS_DISPLAY_CONFIG();
+            WINDOWS_DISPLAY_CONFIG otherDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
+            SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Attempting to compare the display configuration from {filename} and {otherFilename} to see if they are equal.");
+            try
+            {
+                json = File.ReadAllText(filename, Encoding.Unicode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to read the JSON file {filename} to memory but File.ReadAllTextthrew an exception.");
+                SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to read the JSON file {filename} to memory but File.ReadAllTextthrew an exception.");
+            }
+
+            try
+            {
+                otherJson = File.ReadAllText(otherFilename, Encoding.Unicode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to read the JSON file {otherFilename} to memory but File.ReadAllTextthrew an exception.");
+                SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to read the JSON file {otherFilename} to memory but File.ReadAllTextthrew an exception.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(json) && !string.IsNullOrWhiteSpace(otherJson))
+            {
+                try
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Contents exist within {filename} so trying to read them as JSON.");
+                    displayConfig = JsonConvert.DeserializeObject<WINDOWS_DISPLAY_CONFIG>(json, new JsonSerializerSettings
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Ignore,
+                        NullValueHandling = NullValueHandling.Ignore,
+                        DefaultValueHandling = DefaultValueHandling.Include,
+                        TypeNameHandling = TypeNameHandling.Auto,
+                        ObjectCreationHandling = ObjectCreationHandling.Replace
+                    });
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Successfully parsed {filename} as JSON.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                    SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                }
+                try
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Contents exist within {otherFilename} so trying to read them as JSON.");
+                    otherDisplayConfig = JsonConvert.DeserializeObject<WINDOWS_DISPLAY_CONFIG>(otherJson, new JsonSerializerSettings
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Ignore,
+                        NullValueHandling = NullValueHandling.Ignore,
+                        DefaultValueHandling = DefaultValueHandling.Include,
+                        TypeNameHandling = TypeNameHandling.Auto,
+                        ObjectCreationHandling = ObjectCreationHandling.Replace
+                    });
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Successfully parsed {filename} as JSON.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                    SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                }
+
+                if (displayConfig.Equals(otherDisplayConfig))
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The NVIDIA display settings in {filename} and {otherFilename} are equal.");
+                    Console.WriteLine($"The NVIDIA display settings in {filename} and {otherFilename} are equal.");
+                }
+                else
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The NVIDIA display settings in {filename} and {otherFilename} are NOT equal.");
+                    Console.WriteLine($"The NVIDIA display settings in {filename} and {otherFilename} are NOT equal.");
+                }
+
+            }
+            else
+            {
+                SharedLogger.logger.Error($"CCDInfo/equalFromFile: The {filename} or {otherFilename} JSON files exist but at least one of them is empty! Cannot continue.");
+                Console.WriteLine($"CCDInfo/equalFromFile: The {filename} or {otherFilename} JSON files exist but at least one of them is empty! Cannot continue.");
+            }
+        }
+
     }
-    
+
 }
