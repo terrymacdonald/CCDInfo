@@ -7,6 +7,7 @@ using Microsoft.Win32.SafeHandles;
 using DisplayMagicianShared;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 namespace DisplayMagicianShared.Windows
 {
@@ -41,6 +42,7 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_PATH_INFO[] DisplayConfigPaths;
         public DISPLAYCONFIG_MODE_INFO[] DisplayConfigModes;
         public ADVANCED_HDR_INFO_PER_PATH[] DisplayHDRStates;
+        public Dictionary<string, GDI_DISPLAY_SETTING> GdiDisplaySettings;
         // Note: We purposely have left out the DisplaySources from the Equals as it's order keeps changing after each reboot and after each profile swap
         // and it is informational only and doesn't contribute to the configuration (it's used for generating the Screens structure, and therefore for
         // generating the profile icon.
@@ -389,10 +391,76 @@ namespace DisplayMagicianShared.Windows
                 hdrInfoCount++;
             }
 
+            // Get the list of all display adapters in this machine through GDI
+            Dictionary<string, GDI_DISPLAY_SETTING> gdiDeviceSettings = new Dictionary<string, GDI_DISPLAY_SETTING>();
+            UInt32 displayDeviceNum = 0;
+            DISPLAY_DEVICE displayDevice = new DISPLAY_DEVICE();
+            displayDevice.Size = (UInt32)Marshal.SizeOf<DISPLAY_DEVICE>();
+            while (GDIImport.EnumDisplayDevices(null, displayDeviceNum, ref displayDevice, 0))
+            {
+                // Now we try and grab the GDI Device Settings for each display device
+                SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
+                if (displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.AttachedToDesktop) || displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.MultiDriver))
+                {
+                    // If the display device is attached to the Desktop, or a type of display that is represented by a psudeo mirroring application, then skip this display
+                    // e.g. some sort of software interfaced display that doesn't have a physical plug, or maybe uses USB for communication
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
+                    DEVICE_MODE currentMode = new DEVICE_MODE();
+                    currentMode.Size = (UInt16)Marshal.SizeOf<DEVICE_MODE>();
+                    bool gdiWorked = GDIImport.EnumDisplaySettings(displayDevice.DeviceName, DISPLAY_SETTINGS_MODE.CurrentSettings, ref currentMode);
+                    if (gdiWorked)
+                    {
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Got the current Display Settings from display {displayDevice.DeviceName}.");
+                        GDI_DISPLAY_SETTING myDisplaySetting = new GDI_DISPLAY_SETTING();
+                        myDisplaySetting.IsEnabled = true; // Always true if we get here
+                        myDisplaySetting.Device = displayDevice;
+                        myDisplaySetting.DeviceMode = currentMode;
+                        if (displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.PrimaryDevice)) 
+                        {
+                            // This is a primary device, so we'll set that too.
+                            myDisplaySetting.IsPrimary = true;
+                        }
+                        gdiDeviceSettings[displayDevice.DeviceName] = myDisplaySetting;
+                    }
+                    else
+                    {
+                        SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get current display mode settings from display {displayDevice.DeviceName}.");
+                    }
+                }
+                else
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: The display {displayDevice.DeviceName} is either not attached to the desktop, or is not a mirroring driver. Skipping this display device as we cannot use it.");
+                }
+                
+                displayDeviceNum++;
+            }
+                
+
+
+/*            // Get the list of currently connected displays using the EnumDisplayMonitors and a callback
+            var result = new List<DISPLAY_SCREEN>();
+            var callback = new GDIImport.MonitorEnumProcedure(
+                (IntPtr handle, IntPtr dcHandle, ref RECTL rect, IntPtr callbackObject) =>
+                {
+                    result.Add(new DISPLAY_SCREEN(handle));
+
+                    return 1;
+                }
+            );
+            ListGDIImport.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, callback, IntPtr.Zero)
+                ? result.ToArray()
+                : null;
+
+            // Go through the list of GDI Screens
+*/
+            
+
+
             // Store the active paths and modes in our display config object
             windowsDisplayConfig.DisplayConfigPaths = paths;
             windowsDisplayConfig.DisplayConfigModes = modes;
             windowsDisplayConfig.DisplayHDRStates = hdrInfos;
+            windowsDisplayConfig.GdiDisplaySettings = gdiDeviceSettings;
             windowsDisplayConfig.DisplayIdentifiers = GetCurrentDisplayIdentifiers();
 
             return windowsDisplayConfig;
@@ -793,7 +861,7 @@ namespace DisplayMagicianShared.Windows
 
             foreach (ADVANCED_HDR_INFO_PER_PATH myHDRstate in displayConfig.DisplayHDRStates)
             {
-                SharedLogger.logger.Trace($"Trying to get information whether HDR color is in use now on Display {myHDRstate.Id}.");
+                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Trying to get information whether HDR color is in use now on Display {myHDRstate.Id}.");
                 // Get advanced HDR info
                 var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
                 colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
@@ -807,7 +875,7 @@ namespace DisplayMagicianShared.Windows
 
                     if (myHDRstate.AdvancedColorInfo.AdvancedColorSupported && colorInfo.AdvancedColorEnabled != myHDRstate.AdvancedColorInfo.AdvancedColorEnabled)
                     {
-                        SharedLogger.logger.Trace($"HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} but is currently {colorInfo.AdvancedColorEnabled}.");
+                        SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} but is currently {colorInfo.AdvancedColorEnabled}.");
 
                         var setColorState = new DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE();
                         setColorState.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
@@ -834,6 +902,61 @@ namespace DisplayMagicianShared.Windows
                 else
                 {
                     SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to find out if HDR is supported for display #{myHDRstate.Id}");
+                }
+
+            }
+
+            // Attempt to set the display adapters in this machine through GDI
+            SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Attempting to change Display Device settings through GDI API");
+            foreach (var myGdiDisplaySettings in displayConfig.GdiDisplaySettings)
+            {
+                string displayDeviceName = myGdiDisplaySettings.Key;
+                GDI_DISPLAY_SETTING displayDeviceSettings = myGdiDisplaySettings.Value;
+                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Trying to change Device Mode for Display {displayDeviceName}.");
+                DEVICE_MODE modeToUse = displayDeviceSettings.DeviceMode;
+                CHANGE_DISPLAY_RESULTS result = GDIImport.ChangeDisplaySettingsEx(displayDeviceName, ref modeToUse, IntPtr.Zero, CHANGE_DISPLAY_SETTINGS_FLAGS.CDS_UPDATEREGISTRY, IntPtr.Zero);
+                if (result == CHANGE_DISPLAY_RESULTS.Successful)
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Successfully changed display {displayDeviceName} to use the new mode!");
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.BadDualView)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: The settings change was unsuccessful because the system is DualView capable. Display {displayDeviceName} not updated to new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.BadFlags)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: An invalid set of flags was passed in. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.BadMode)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: The graphics mode is not supported. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.BadParam)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: An invalid parameter was passed in. This can include an invalid flag or combination of flags. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.Failed)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: The display driver failed to apply the specified graphics mode. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.NotUpdated)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: Unable to write new settings to the registry. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else if (result == CHANGE_DISPLAY_RESULTS.Restart)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: The computer must be restarted for the graphics mode to work. Display {displayDeviceName} not updated to use the new mode.");
+                    return false;
+                }
+                else
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Display {displayDeviceName} not updated to use the new mode.");
                 }
 
             }

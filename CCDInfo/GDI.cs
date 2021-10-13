@@ -59,15 +59,18 @@ namespace DisplayMagicianShared.Windows
     [Flags]
     public enum CHANGE_DISPLAY_SETTINGS_FLAGS : UInt32
     {
-        UpdateRegistry = 0x00000001,
-
-        Global = 0x00000008,
-
-        SetPrimary = 0x00000010,
-
-        Reset = 0x40000000,
-
-        NoReset = 0x10000000
+        CDS_NONE = 0,
+        CDS_UPDATEREGISTRY = 0x00000001,
+        CDS_TEST = 0x00000002,
+        CDS_FULLSCREEN = 0x00000004,
+        CDS_GLOBAL = 0x00000008,
+        CDS_SET_PRIMARY = 0x00000010,
+        CDS_VIDEOPARAMETERS = 0x00000020,
+        CDS_ENABLE_UNSAFE_MODES = 0x00000100,
+        CDS_DISABLE_UNSAFE_MODES = 0x00000200,
+        CDS_RESET = 0x40000000,
+        CDS_RESET_EX = 0x20000000,
+        CDS_NORESET = 0x10000000
     }
 
     public enum DEVICE_CAPABILITY : Int32
@@ -432,6 +435,19 @@ namespace DisplayMagicianShared.Windows
         }
     }
 
+    public struct GDI_DISPLAY_SETTING
+    {
+        public bool IsEnabled;
+        public bool IsPrimary;
+        public DISPLAY_DEVICE Device;
+        public DEVICE_MODE DeviceMode;
+
+
+        /*public static GDI_DISPLAY_SETTING Initialize()
+        {            
+        }*/
+    }
+
     /*    // 8-bytes structure
         [StructLayout(LayoutKind.Sequential)]
         public struct POINTL
@@ -439,6 +455,57 @@ namespace DisplayMagicianShared.Windows
             public Int32 x;
             public Int32 y;
         }*/
+
+    internal class DCHandle : SafeHandle
+    {
+        private readonly bool _created;
+
+        private DCHandle(IntPtr handle, bool created) : base(handle, true)
+        {
+            _created = created;
+        }
+
+        public override bool IsInvalid
+        {
+            get => handle == IntPtr.Zero;
+        }
+
+        public static DCHandle CreateFromDevice(string screenName, string devicePath)
+        {
+            return new DCHandle(
+                GDIImport.CreateDC(screenName, devicePath, null, IntPtr.Zero),
+                true
+            );
+        }
+
+        public static DCHandle CreateFromScreen(string screenName)
+        {
+            return CreateFromDevice(screenName, screenName);
+        }
+
+        public static DCHandle CreateFromWindow(IntPtr windowHandle)
+        {
+            return new DCHandle(
+                GDIImport.GetDC(windowHandle),
+                true
+            );
+        }
+
+        public static DCHandle CreateGlobal()
+        {
+            return new DCHandle(
+                GDIImport.CreateDC("DISPLAY", null, null, IntPtr.Zero),
+                true
+            );
+        }
+
+        protected override bool ReleaseHandle()
+        {
+            return _created
+                ? GDIImport.DeleteDC(this)
+                : GDIImport.ReleaseDC(IntPtr.Zero, this);
+        }
+    }
 
     class GDIImport
     {
@@ -478,7 +545,7 @@ namespace DisplayMagicianShared.Windows
         internal static extern bool EnumDisplayDevices(
             string deviceName,
             UInt32 deviceNumber,
-            ref DeviceContext.Structures.DisplayDevice displayDevice,
+            ref DISPLAY_DEVICE displayDevice,
             UInt32 flags
         );
 
