@@ -432,12 +432,12 @@ namespace CCDInfo
                 if (displayConfig.Equals(otherDisplayConfig))
                 {
                     SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The NVIDIA display settings in {filename} and {otherFilename} are equal.");
-                    Console.WriteLine($"The NVIDIA display settings in {filename} and {otherFilename} are equal.");
+                    Console.WriteLine($"The Windows display settings in {filename} and {otherFilename} are equal.");
                 }
                 else
                 {
                     SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The NVIDIA display settings in {filename} and {otherFilename} are NOT equal.");
-                    Console.WriteLine($"The NVIDIA display settings in {filename} and {otherFilename} are NOT equal.");
+                    Console.WriteLine($"The Windows display settings in {filename} and {otherFilename} are NOT equal.");
                 }
 
             }
