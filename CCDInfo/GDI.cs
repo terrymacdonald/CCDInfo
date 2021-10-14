@@ -274,7 +274,7 @@ namespace DisplayMagicianShared.Windows
     // https://msdn.microsoft.com/en-us/library/windows/desktop/dd183565(v=vs.85).aspx
     // https://www.c-sharpcorner.com/uploadfile/GemingLeader/changing-display-settings-programmatically/
     [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Ansi)]
-    public struct DEVICE_MODE
+    public struct DEVICE_MODE : IEquatable<DEVICE_MODE>
     {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         [FieldOffset(0)]
@@ -360,19 +360,44 @@ namespace DisplayMagicianShared.Windows
         [FieldOffset(120)]
         public UInt32 DisplayFrequency;
 
-        /// <summary>
-        /// Initializes the structure variables.
-        /// </summary>
-        public void Initialize()
+        public override bool Equals(object obj) => obj is DEVICE_MODE other && this.Equals(other);
+
+        public bool Equals(DEVICE_MODE other)
+            =>  DeviceName.Equals(other.DeviceName) &&
+                SpecificationVersion == other.SpecificationVersion &&
+                DriverVersion.Equals(other.DriverVersion) &&
+                Size.Equals(other.Size) &&
+                DriverExtra.Equals(other.DriverExtra) &&
+                Fields.Equals(other.Fields) &&
+                Position.Equals(other.Position) &&
+                DisplayOrientation.Equals(other.DisplayOrientation) &&
+                DisplayFixedOutput.Equals(other.DisplayFixedOutput) &&
+                Color.Equals(other.Color) &&
+                Duplex.Equals(other.Duplex) &&
+                YResolution.Equals(other.YResolution) &&
+                TrueTypeOption.Equals(other.TrueTypeOption) &&
+                Collate.Equals(other.Collate) &&
+                FormName.Equals(other.FormName) &&
+                LogicalInchPixels.Equals(other.LogicalInchPixels) &&
+                BitsPerPixel.Equals(other.BitsPerPixel) &&
+                PixelsWidth.Equals(other.PixelsWidth) &&
+                PixelsHeight.Equals(other.PixelsHeight) &&
+                DisplayFlags.Equals(other.DisplayFlags) &&
+                DisplayFrequency == other.DisplayFrequency;
+
+        public override int GetHashCode()
         {
-            this.DeviceName = new string(new char[32]);
-            this.FormName = new string(new char[32]);
-            this.Size = (UInt16)Marshal.SizeOf(this);
+            return (DeviceName, SpecificationVersion, DriverVersion, Size, DriverExtra, Fields, Position, DisplayOrientation, DisplayFixedOutput, Color, Duplex, 
+                YResolution, TrueTypeOption, Collate, FormName, LogicalInchPixels, BitsPerPixel, PixelsWidth, PixelsHeight, DisplayFlags, DisplayFrequency).GetHashCode();
         }
+
+        public static bool operator ==(DEVICE_MODE lhs, DEVICE_MODE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DEVICE_MODE lhs, DEVICE_MODE rhs) => !(lhs == rhs);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct DISPLAY_DEVICE
+    public struct DISPLAY_DEVICE : IEquatable<DISPLAY_DEVICE>
     {
         [MarshalAs(UnmanagedType.U4)] 
         public UInt32 Size;
@@ -392,17 +417,29 @@ namespace DisplayMagicianShared.Windows
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
         public string DeviceKey;
 
-        public static DISPLAY_DEVICE Initialize()
+        public override bool Equals(object obj) => obj is DISPLAY_DEVICE other && this.Equals(other);
+
+        public bool Equals(DISPLAY_DEVICE other)
+            =>  Size == other.Size &&
+                DeviceName == other.DeviceName &&
+                DeviceString == other.DeviceString &&
+                StateFlags == other.StateFlags &&
+                DeviceId == other.DeviceId &&
+                DeviceKey == other.DeviceKey;
+
+        public override int GetHashCode()
         {
-            return new DISPLAY_DEVICE
-            {
-                Size = (UInt32)Marshal.SizeOf(typeof(DISPLAY_DEVICE))
-            };
+            return (Size, DeviceName, DeviceString, StateFlags, DeviceId, DeviceKey).GetHashCode();
         }
+
+        public static bool operator ==(DISPLAY_DEVICE lhs, DISPLAY_DEVICE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAY_DEVICE lhs, DISPLAY_DEVICE rhs) => !(lhs == rhs);
+
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct GAMMA_RAMP
+    public struct GAMMA_RAMP : IEquatable<GAMMA_RAMP>
     {
         public const int DataPoints = 256;
 
@@ -412,11 +449,27 @@ namespace DisplayMagicianShared.Windows
         public UInt16[] Green;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = DataPoints)]
         public UInt16[] Blue;
-        
+
+        public override bool Equals(object obj) => obj is GAMMA_RAMP other && this.Equals(other);
+
+        public bool Equals(GAMMA_RAMP other)
+            =>  Red.SequenceEqual(other.Red) &&
+                Green.SequenceEqual(other.Green) &&
+                Blue.SequenceEqual(other.Blue);
+
+        public override int GetHashCode()
+        {
+            return (Red, Green, Blue).GetHashCode();
+        }
+
+        public static bool operator ==(GAMMA_RAMP lhs, GAMMA_RAMP rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(GAMMA_RAMP lhs, GAMMA_RAMP rhs) => !(lhs == rhs);
+
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct MONITOR_INFO
+    public struct MONITOR_INFO : IEquatable<MONITOR_INFO>
     {
         internal UInt32 Size;
         public RECTL Bounds;
@@ -426,35 +479,50 @@ namespace DisplayMagicianShared.Windows
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
         public string DisplayName;
 
-        public static MONITOR_INFO Initialize()
+        public override bool Equals(object obj) => obj is MONITOR_INFO other && this.Equals(other);
+
+        public bool Equals(MONITOR_INFO other)
+            =>  Size == other.Size &&
+                Bounds.Equals(other.Bounds) &&
+                WorkingArea.Equals(other.WorkingArea) &&
+                Flags == other.Flags &&
+                DisplayName == other.DisplayName;
+
+        public override int GetHashCode()
         {
-            return new MONITOR_INFO
-            {
-                Size = (UInt32)Marshal.SizeOf(typeof(MONITOR_INFO))
-            };
+            return (Size, Bounds, WorkingArea, Flags, DisplayName).GetHashCode();
         }
+
+        public static bool operator ==(MONITOR_INFO lhs, MONITOR_INFO rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(MONITOR_INFO lhs, MONITOR_INFO rhs) => !(lhs == rhs);
     }
 
-    public struct GDI_DISPLAY_SETTING
+    public struct GDI_DISPLAY_SETTING : IEquatable<GDI_DISPLAY_SETTING>
     {
         public bool IsEnabled;
         public bool IsPrimary;
         public DISPLAY_DEVICE Device;
         public DEVICE_MODE DeviceMode;
 
+        public override bool Equals(object obj) => obj is GDI_DISPLAY_SETTING other && this.Equals(other);
 
-        /*public static GDI_DISPLAY_SETTING Initialize()
-        {            
-        }*/
+        public bool Equals(GDI_DISPLAY_SETTING other)
+            => IsEnabled == other.IsEnabled &&
+                IsPrimary == other.IsPrimary &&
+                Device.Equals(other.Device) &&
+                DeviceMode.Equals(other.DeviceMode);
+
+        public override int GetHashCode()
+        {
+            return (IsEnabled, IsPrimary, Device, DeviceMode).GetHashCode();
+        }
+
+        public static bool operator ==(GDI_DISPLAY_SETTING lhs, GDI_DISPLAY_SETTING rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(GDI_DISPLAY_SETTING lhs, GDI_DISPLAY_SETTING rhs) => !(lhs == rhs);
     }
 
-    /*    // 8-bytes structure
-        [StructLayout(LayoutKind.Sequential)]
-        public struct POINTL
-        {
-            public Int32 x;
-            public Int32 y;
-        }*/
 
     internal class DCHandle : SafeHandle
     {

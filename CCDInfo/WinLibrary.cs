@@ -54,11 +54,12 @@ namespace DisplayMagicianShared.Windows
         => DisplayConfigPaths.SequenceEqual(other.DisplayConfigPaths) &&
            DisplayConfigModes.SequenceEqual(other.DisplayConfigModes) &&
            DisplayHDRStates.SequenceEqual(other.DisplayHDRStates) &&
+           GdiDisplaySettings.SequenceEqual(other.GdiDisplaySettings) &&
            DisplayIdentifiers.SequenceEqual(other.DisplayIdentifiers);
 
         public override int GetHashCode()
         {
-            return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates).GetHashCode();
+            return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates, GdiDisplaySettings, DisplayIdentifiers).GetHashCode();
         }
         public static bool operator ==(WINDOWS_DISPLAY_CONFIG lhs, WINDOWS_DISPLAY_CONFIG rhs) => lhs.Equals(rhs);
 
@@ -128,6 +129,24 @@ namespace DisplayMagicianShared.Windows
         public static WinLibrary GetLibrary()
         {
             return _instance;
+        }
+
+        public WINDOWS_DISPLAY_CONFIG CreateDefaultConfig()
+        {
+            WINDOWS_DISPLAY_CONFIG myDefaultConfig = new WINDOWS_DISPLAY_CONFIG();
+
+            // Fill in the minimal amount we need to avoid null references
+            // so that we won't break json.net when we save a default config
+
+            myDefaultConfig.DisplayAdapters = new Dictionary<ulong, string>();
+            myDefaultConfig.DisplayConfigModes = new DISPLAYCONFIG_MODE_INFO[0];
+            myDefaultConfig.DisplayConfigPaths = new DISPLAYCONFIG_PATH_INFO[0];
+            myDefaultConfig.DisplayHDRStates = new ADVANCED_HDR_INFO_PER_PATH[0];
+            myDefaultConfig.DisplayIdentifiers = new List<string>();
+            myDefaultConfig.DisplaySources = new Dictionary<string, uint>();
+            myDefaultConfig.GdiDisplaySettings = new Dictionary<string, GDI_DISPLAY_SETTING>();
+
+            return myDefaultConfig;
         }
 
         private void PatchAdapterIDs(ref WINDOWS_DISPLAY_CONFIG savedDisplayConfig, Dictionary<ulong, string> currentAdapterMap)
@@ -435,27 +454,6 @@ namespace DisplayMagicianShared.Windows
                 displayDeviceNum++;
             }
                 
-
-
-/*            // Get the list of currently connected displays using the EnumDisplayMonitors and a callback
-            var result = new List<DISPLAY_SCREEN>();
-            var callback = new GDIImport.MonitorEnumProcedure(
-                (IntPtr handle, IntPtr dcHandle, ref RECTL rect, IntPtr callbackObject) =>
-                {
-                    result.Add(new DISPLAY_SCREEN(handle));
-
-                    return 1;
-                }
-            );
-            ListGDIImport.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, callback, IntPtr.Zero)
-                ? result.ToArray()
-                : null;
-
-            // Go through the list of GDI Screens
-*/
-            
-
-
             // Store the active paths and modes in our display config object
             windowsDisplayConfig.DisplayConfigPaths = paths;
             windowsDisplayConfig.DisplayConfigModes = modes;
