@@ -220,7 +220,7 @@ namespace DisplayMagicianShared.Windows
         /// <summary>
         ///     No rotation
         /// </summary>
-        Identity = 0,
+        Rotate0Degree = 0,
 
         /// <summary>
         ///     90 degree rotation

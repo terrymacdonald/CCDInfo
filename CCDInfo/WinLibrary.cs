@@ -686,6 +686,8 @@ namespace DisplayMagicianShared.Windows
                     SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the adapter device path for target #{path.TargetInfo.AdapterId}");
                 }
 
+                // show the 
+
                 // get display target preferred mode
                 var targetPreferredInfo = new DISPLAYCONFIG_TARGET_PREFERRED_MODE();
                 targetPreferredInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE;
@@ -811,6 +813,76 @@ namespace DisplayMagicianShared.Windows
                     SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to find out the SDL white level for display #{path.TargetInfo.Id}");
                 }
             }
+
+            // Get the list of all display adapters in this machine through GDI
+            Dictionary<string, GDI_DISPLAY_SETTING> gdiDeviceSettings = new Dictionary<string, GDI_DISPLAY_SETTING>();
+            UInt32 displayDeviceNum = 0;
+            DISPLAY_DEVICE displayDevice = new DISPLAY_DEVICE();
+            displayDevice.Size = (UInt32)Marshal.SizeOf<DISPLAY_DEVICE>();
+            stringToReturn += $"----++++==== GDI Device Information ====++++----\n";            
+            while (GDIImport.EnumDisplayDevices(null, displayDeviceNum, ref displayDevice, 0))
+            {
+                // Now we try and grab the GDI Device Info for each display device
+                stringToReturn += $"****** Display Device Info for Display {displayDevice.DeviceName} *******\n";
+                stringToReturn += $" Display Device ID: {displayDevice.DeviceId}\n";
+                stringToReturn += $" Display Device Key: {displayDevice.DeviceKey}\n";
+                stringToReturn += $" Display Device Name: {displayDevice.DeviceName}\n";
+                stringToReturn += $" Display Device String: {displayDevice.DeviceString}\n";
+                stringToReturn += $" Is Attached to Desktop: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.AttachedToDesktop)}\n";
+                stringToReturn += $" Is Disconnected: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.Disconnect)}\n";
+                stringToReturn += $" Is a Mirroing Device: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.MirroringDriver)}\n";
+                stringToReturn += $" Has Modes Pruned: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.ModesPruned)}\n";
+                stringToReturn += $" Is Multi-driver: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.MultiDriver)}\n";
+                stringToReturn += $" Is Primary Display Device: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.PrimaryDevice)}\n";
+                stringToReturn += $" Is Remote Display Device: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.Remote)}\n";
+                stringToReturn += $" Is Removable Display Device: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.Removable)}\n";
+                stringToReturn += $" Is VGA Compatible Display Device: {displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.VGACompatible)}\n";
+                stringToReturn += $"\n";
+
+
+                SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
+                if (displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.AttachedToDesktop) || displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.MultiDriver))
+                {
+                    // If the display device is attached to the Desktop, or a type of display that is represented by a psudeo mirroring application, then skip this display
+                    // e.g. some sort of software interfaced display that doesn't have a physical plug, or maybe uses USB for communication
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
+                    stringToReturn += $" Display Device Settings for attached Display {displayDevice.DeviceName} :\n";
+                    DEVICE_MODE currentMode = new DEVICE_MODE();
+                    currentMode.Size = (UInt16)Marshal.SizeOf<DEVICE_MODE>();
+                    bool gdiWorked = GDIImport.EnumDisplaySettings(displayDevice.DeviceName, DISPLAY_SETTINGS_MODE.CurrentSettings, ref currentMode);
+                    if (gdiWorked)
+                    {
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Got the current Display Settings from display {displayDevice.DeviceName}.");
+                        // Now we try and grab the GDI Device Settings for each display device
+                        stringToReturn += $" Bits Per Pixel: {currentMode.BitsPerPixel}\n";
+                        stringToReturn += $" Device Name: {currentMode.DeviceName}\n";
+                        stringToReturn += $" Display Fixed Output: {currentMode.DisplayFixedOutput}\n";
+                        stringToReturn += $" Grayscale Display: {currentMode.DisplayFlags.HasFlag(DISPLAY_FLAGS.Grayscale)}\n";
+                        stringToReturn += $" Interlaced Display: {currentMode.DisplayFlags.HasFlag(DISPLAY_FLAGS.Interlaced)}\n";
+                        stringToReturn += $" Refresh Rate: {currentMode.DisplayFrequency}Hz\n";
+                        stringToReturn += $" Display Rotation: {currentMode.DisplayOrientation.ToString("G")}\n";
+                        stringToReturn += $" Driver Extra: {currentMode.DriverExtra}\n";
+                        stringToReturn += $" Driver Version: {currentMode.DriverVersion}\n";
+                        stringToReturn += $" All Display Fields populated by driver: {currentMode.Fields.HasFlag(DEVICE_MODE_FIELDS.AllDisplay)}\n";
+                        stringToReturn += $" Display Width and Height in Pixels: {currentMode.PixelsWidth} x {currentMode.PixelsHeight}\n";
+                        stringToReturn += $" Display Position: X:{currentMode.Position.X}, Y:{currentMode.Position.Y}\n";
+                        stringToReturn += $" Specification Version: {currentMode.SpecificationVersion}\n";
+                        stringToReturn += $"\n";
+                    }
+                    else
+                    {
+                        SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get current display mode settings from display {displayDevice.DeviceName}.");
+                        stringToReturn += $" No display settings found.\n\n";
+                    }
+                }
+                else
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: The display {displayDevice.DeviceName} is either not attached to the desktop, or is not a mirroring driver. Skipping this display device as we cannot use it.");
+                }
+
+                displayDeviceNum++;
+            }
+
             return stringToReturn;
         }
 
