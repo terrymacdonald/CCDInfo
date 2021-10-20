@@ -602,55 +602,20 @@ namespace DisplayMagicianShared.Windows
         public string PrintActiveConfig()
         {
             string stringToReturn = "";
+
+            // Get the current config
+            WINDOWS_DISPLAY_CONFIG displayConfig = GetActiveConfig();
+
+            WIN32STATUS err = WIN32STATUS.ERROR_GEN_FAILURE;
             stringToReturn += $"****** WINDOWS CCD CONFIGURATION *******\n";
+            stringToReturn += $"Display profile contains cloned screens: {displayConfig.IsCloned}\n";
+            stringToReturn += $"\n";
+
             // Get the size of the largest Active Paths and Modes arrays
             int pathCount = 0;
             int modeCount = 0;
-            WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
-            if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                SharedLogger.logger.Error($"WinLibrary/PrintActiveConfig: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-                throw new WinLibraryException($"GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-            }
-
-            SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Getting the current Display Config path and mode arrays");
-            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-            if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
-            {
-                SharedLogger.logger.Warn($"WinLibrary/PrintActiveConfig: The displays were modified between GetDisplayConfigBufferSizes and QueryDisplayConfig so we need to get the buffer sizes again.");
-                SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Getting the size of the largest Active Paths and Modes arrays");
-                // Screen changed in between GetDisplayConfigBufferSizes and QueryDisplayConfig, so we need to get buffer sizes again
-                // as per https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig 
-                err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out pathCount, out modeCount);
-                if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    SharedLogger.logger.Error($"WinLibrary/PrintActiveConfig: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes again");
-                    throw new WinLibraryException($"GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes again");
-                }
-                SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Getting the current Display Config path and mode arrays");
-                paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-                modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-                err = CCDImport.QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-                if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
-                {
-                    SharedLogger.logger.Error($"WinLibrary/PrintActiveConfig: ERROR - The displays were still modified between GetDisplayConfigBufferSizes and QueryDisplayConfig, even though we tried twice. Something is wrong.");
-                    throw new WinLibraryException($"The displays were still modified between GetDisplayConfigBufferSizes and QueryDisplayConfig, even though we tried twice. Something is wrong.");
-                }
-                else if (err != WIN32STATUS.ERROR_SUCCESS)
-                {
-                    SharedLogger.logger.Error($"WinLibrary/PrintActiveConfig: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays again");
-                    throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays again.");
-                }
-            }
-            else if (err != WIN32STATUS.ERROR_SUCCESS)
-            {
-                SharedLogger.logger.Error($"WinLibrary/PrintActiveConfig: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
-                throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays.");
-            }
-
-            foreach (var path in paths)
+            
+            foreach (var path in displayConfig.DisplayConfigPaths)
             {
                 stringToReturn += $"----++++==== Path ====++++----\n";
 
@@ -666,6 +631,17 @@ namespace DisplayMagicianShared.Windows
                     SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id}.");
                     stringToReturn += $"****** Interrogating Display Source {path.SourceInfo.Id} *******\n";
                     stringToReturn += $"Found Display Source {sourceInfo.ViewGdiDeviceName}\n";
+                    if (displayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Count > 1)
+                    {
+                        stringToReturn += $"Display Source is Cloned: true\n";
+                        stringToReturn += $"Number of Display Source clones: {displayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Count - 1}\n";
+                    }
+                    else
+                    {
+                        stringToReturn += $"Display Source is Cloned: false\n";
+                        stringToReturn += $"Number of Display Source clones: 0\n";
+
+                    }
                     stringToReturn += $"\n";
                 }
                 else
@@ -683,7 +659,6 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref targetInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Connector Instance: {targetInfo.ConnectorInstance} for source {path.TargetInfo.Id}.");
                     SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: Connector Instance: {targetInfo.ConnectorInstance} for source {path.TargetInfo.Id}.");
                     SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: EDID Manufacturer ID: {targetInfo.EdidManufactureId} for source {path.TargetInfo.Id}.");
                     SharedLogger.logger.Trace($"WinLibrary/PrintActiveConfig: EDID Product Code ID: {targetInfo.EdidProductCodeId} for source {path.TargetInfo.Id}.");

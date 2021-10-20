@@ -59,7 +59,7 @@ namespace CCDInfo
                     SharedLogger.logger.Debug($"CCDInfo/Main: Attempting to save the display settings to {args[1]} as save command was provided");
                     if (args.Length != 2)
                     {
-                        Console.WriteLine($"ERROR - You need to provide a filename in which to save display settings");
+                        Console.WriteLine($"ERROR - You need to provide a filename in which to save display settings\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - You need to provide a filename in which to save display settings");
                         Environment.Exit(1);
                     }
@@ -76,13 +76,13 @@ namespace CCDInfo
                     SharedLogger.logger.Debug($"CCDInfo/Main: Attempting to use the display settings in {args[1]} as load command was provided");
                     if (args.Length != 2)
                     {
-                        Console.WriteLine($"ERROR - You need to provide a filename from which to load display settings");
+                        Console.WriteLine($"ERROR - You need to provide a filename from which to load display settings\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - You need to provide a filename from which to load display settings");
                         Environment.Exit(1);
                     }
                     if (!File.Exists(args[1]))
                     {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to load settings from it");
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to load settings from i\nt");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to load settings from it");
                         Environment.Exit(1);
                     }
@@ -93,13 +93,13 @@ namespace CCDInfo
                     SharedLogger.logger.Debug($"CCDInfo/Main: showing if the {args[1]} is a valid display cofig file as possible command was provided");
                     if (args.Length != 2)
                     {
-                        Console.WriteLine($"ERROR - You need to provide a filename from which we will check if the display settings are possible");
+                        Console.WriteLine($"ERROR - You need to provide a filename from which we will check if the display settings are possible\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - You need to provide a filename from which we will check if the display settings are possible");
                         Environment.Exit(1);
                     }
                     if (!File.Exists(args[1]))
                     {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
                         Environment.Exit(1);
                     }
@@ -118,13 +118,13 @@ namespace CCDInfo
                     SharedLogger.logger.Debug($"CCDInfo/Main: showing if {args[1]} and {args[2]} are both a valid display config files as equals command was provided");
                     if (!File.Exists(args[1]))
                     {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
                         Environment.Exit(1);
                     }
                     if (!File.Exists(args[2]))
                     {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[2]} to check the settings from it");
+                        Console.WriteLine($"ERROR - Couldn't find the file {args[2]} to check the settings from it\n");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[2]} to check the settings from it");
                         Environment.Exit(1);
                     }
