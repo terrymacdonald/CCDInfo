@@ -443,57 +443,10 @@ namespace DisplayMagicianShared.Windows
                 hdrInfoCount++;
             }
 
-            /*// Get the list of all display adapters in this machine through GDI
-            Dictionary<string, GDI_DISPLAY_SETTING> gdiDeviceSettings = new Dictionary<string, GDI_DISPLAY_SETTING>();
-            Dictionary<string, string> gdiDeviceSources = new Dictionary<string, string>();
-            UInt32 displayDeviceNum = 0;
-            DISPLAY_DEVICE displayDevice = new DISPLAY_DEVICE();
-            displayDevice.Size = (UInt32)Marshal.SizeOf<DISPLAY_DEVICE>();
-            while (GDIImport.EnumDisplayDevices(null, displayDeviceNum, ref displayDevice, 0))
-            {
-                // Now we try and grab the GDI Device Settings for each display device
-                SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
-                if (displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.AttachedToDesktop) || displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.MultiDriver))
-                {
-                    // If the display device is attached to the Desktop, or a type of display that is represented by a psudeo mirroring application, then skip this display
-                    // e.g. some sort of software interfaced display that doesn't have a physical plug, or maybe uses USB for communication
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the current Display Settings for {displayDevice.DeviceName}");
-                    DEVICE_MODE currentMode = new DEVICE_MODE();
-                    currentMode.Size = (UInt16)Marshal.SizeOf<DEVICE_MODE>();
-                    bool gdiWorked = GDIImport.EnumDisplaySettings(displayDevice.DeviceName, DISPLAY_SETTINGS_MODE.CurrentSettings, ref currentMode);
-                    if (gdiWorked)
-                    {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Got the current Display Settings from display {displayDevice.DeviceName}.");
-                        GDI_DISPLAY_SETTING myDisplaySetting = new GDI_DISPLAY_SETTING();
-                        myDisplaySetting.IsEnabled = true; // Always true if we get here
-                        myDisplaySetting.Device = displayDevice;
-                        myDisplaySetting.DeviceMode = currentMode;
-                        if (displayDevice.StateFlags.HasFlag(DISPLAY_DEVICE_STATE_FLAGS.PrimaryDevice))
-                        {
-                            // This is a primary device, so we'll set that too.
-                            myDisplaySetting.IsPrimary = true;
-                        }
-                        gdiDeviceSettings[displayDevice.DeviceKey] = myDisplaySetting;
-                        gdiDeviceSources[displayDevice.DeviceName] = displayDevice.DeviceKey;
-                    }
-                    else
-                    {
-                        SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get current display mode settings from display {displayDevice.DeviceName}.");
-                    }
-                }
-                else
-                {
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: The display {displayDevice.DeviceName} is either not attached to the desktop, or is not a mirroring driver. Skipping this display device as we cannot use it.");
-                }
-
-                displayDeviceNum++;
-            }*/
-
             // Store the active paths and modes in our display config object
             windowsDisplayConfig.DisplayConfigPaths = paths;
             windowsDisplayConfig.DisplayConfigModes = modes;
             windowsDisplayConfig.DisplayHDRStates = hdrInfos;
-            //windowsDisplayConfig.GdiDisplaySettings = gdiDeviceSettings;
             windowsDisplayConfig.GdiDisplaySettings = GetGdiDisplaySettings();
             windowsDisplayConfig.DisplayIdentifiers = GetCurrentDisplayIdentifiers();
 
