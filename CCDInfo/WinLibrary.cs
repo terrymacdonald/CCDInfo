@@ -22,7 +22,7 @@ namespace DisplayMagicianShared.Windows
         public override bool Equals(object obj) => obj is ADVANCED_HDR_INFO_PER_PATH other && this.Equals(other);
         public bool Equals(ADVANCED_HDR_INFO_PER_PATH other)
         => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
-            //Id == other.Id && // Removed the ID too, as that changes if the user has a Clone!
+           //Id == other.Id && // Removed the ID too, as that changes if the user has a Clone!
            AdvancedColorInfo.Equals(other.AdvancedColorInfo) &&
            SDRWhiteLevel.Equals(other.SDRWhiteLevel);
         public override int GetHashCode()
@@ -52,7 +52,7 @@ namespace DisplayMagicianShared.Windows
 
         public override bool Equals(object obj) => obj is WINDOWS_DISPLAY_CONFIG other && this.Equals(other);
         public bool Equals(WINDOWS_DISPLAY_CONFIG other)
-        => IsCloned == other.IsCloned && 
+        => IsCloned == other.IsCloned &&
            DisplayConfigPaths.SequenceEqual(other.DisplayConfigPaths) &&
            DisplayConfigModes.SequenceEqual(other.DisplayConfigModes) &&
            DisplayHDRStates.SequenceEqual(other.DisplayHDRStates) &&
@@ -61,7 +61,7 @@ namespace DisplayMagicianShared.Windows
 
         public override int GetHashCode()
         {
-            return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates, GdiDisplaySettings, IsCloned,  DisplayIdentifiers).GetHashCode();
+            return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates, GdiDisplaySettings, IsCloned, DisplayIdentifiers).GetHashCode();
         }
         public static bool operator ==(WINDOWS_DISPLAY_CONFIG lhs, WINDOWS_DISPLAY_CONFIG rhs) => lhs.Equals(rhs);
 
@@ -77,7 +77,7 @@ namespace DisplayMagicianShared.Windows
         private static WinLibrary _instance = new WinLibrary();
 
         private bool _initialised = false;
-        private WINDOWS_DISPLAY_CONFIG _activeConfig;
+        private WINDOWS_DISPLAY_CONFIG _activeDisplayConfig;
 
         // To detect redundant calls
         private bool _disposed = false;
@@ -90,13 +90,13 @@ namespace DisplayMagicianShared.Windows
         {
             SharedLogger.logger.Trace("WinLibrary/WinLibrary: Intialising Windows CCD library interface");
             _initialised = true;
-            _activeConfig = CreateDefaultConfig();
+            _activeDisplayConfig = GetActiveConfig();
         }
 
         ~WinLibrary()
         {
             // The WinLibrary was initialised, but doesn't need to be freed.
-            SharedLogger.logger.Trace("WinLibrary/~WinLibrary: Destroying Windows CCD library interface");            
+            SharedLogger.logger.Trace("WinLibrary/~WinLibrary: Destroying Windows CCD library interface");
         }
 
         // Public implementation of Dispose pattern callable by consumers.
@@ -128,11 +128,11 @@ namespace DisplayMagicianShared.Windows
             }
         }
 
-        public WINDOWS_DISPLAY_CONFIG ActiveConfig
+        public WINDOWS_DISPLAY_CONFIG ActiveDisplayConfig
         {
             get
             {
-                return _activeConfig;
+                return _activeDisplayConfig;
             }
         }
 
@@ -140,7 +140,7 @@ namespace DisplayMagicianShared.Windows
         {
             get
             {
-                return _activeConfig.DisplayIdentifiers;
+                return _activeDisplayConfig.DisplayIdentifiers;
             }
         }
 
@@ -268,7 +268,7 @@ namespace DisplayMagicianShared.Windows
             SharedLogger.logger.Trace($"WinLibrary/UpdateActiveConfig: Updating the currently active config");
             try
             {
-                _activeConfig = GetActiveConfig();
+                _activeDisplayConfig = GetActiveConfig();
             }
             catch (Exception ex)
             {
@@ -333,7 +333,7 @@ namespace DisplayMagicianShared.Windows
             {
                 SharedLogger.logger.Error($"WinLibrary/GetWindowsDisplayConfig: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
                 throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays.");
-            }            
+            }
 
             // Prepare the empty windows display config
             WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
@@ -388,8 +388,8 @@ namespace DisplayMagicianShared.Windows
                     {
                         // We already have at least one display using this source, so we need to add the other cloned display to the existing list
                         windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(paths[i].SourceInfo.Id);
-                        isClonedPath = true; 
-                        windowsDisplayConfig.IsCloned = true;                        
+                        isClonedPath = true;
+                        windowsDisplayConfig.IsCloned = true;
                     }
                     else
                     {
@@ -521,7 +521,7 @@ namespace DisplayMagicianShared.Windows
             windowsDisplayConfig.DisplayConfigModes = modes;
             windowsDisplayConfig.DisplayHDRStates = hdrInfos;
             windowsDisplayConfig.GdiDisplaySettings = GetGdiDisplaySettings();
-            
+
 
             return windowsDisplayConfig;
         }
@@ -683,7 +683,7 @@ namespace DisplayMagicianShared.Windows
             string stringToReturn = "";
 
             // Get the current config
-            WINDOWS_DISPLAY_CONFIG displayConfig = GetActiveConfig();
+            WINDOWS_DISPLAY_CONFIG displayConfig = ActiveDisplayConfig;
 
             WIN32STATUS err = WIN32STATUS.ERROR_GEN_FAILURE;
             stringToReturn += $"****** WINDOWS CCD CONFIGURATION *******\n";
@@ -693,7 +693,7 @@ namespace DisplayMagicianShared.Windows
             // Get the size of the largest Active Paths and Modes arrays
             int pathCount = 0;
             int modeCount = 0;
-            
+
             foreach (var path in displayConfig.DisplayConfigPaths)
             {
                 stringToReturn += $"----++++==== Path ====++++----\n";
@@ -990,12 +990,12 @@ namespace DisplayMagicianShared.Windows
             // Get the all possible windows display configs
             SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Generating a list of all the current display configs");
             WINDOWS_DISPLAY_CONFIG allWindowsDisplayConfig = GetWindowsDisplayConfig(QDC.QDC_ALL_PATHS);
-                       
+
             if (displayConfig.IsCloned)
             {
                 SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have a cloned display in this display profile, so using the Windows GDI to set the layout");
             }
-            else 
+            else
             {
                 SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have no cloned displays in thus display profile, so using the Windows CCD to set the layout");
             }
@@ -1146,21 +1146,18 @@ namespace DisplayMagicianShared.Windows
                     {
                         SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Display {displayDeviceKey} not updated to use the new mode.");
                     }
-                }                    
+                }
 
             }
-            
+
             return true;
         }
 
         public bool IsActiveConfig(WINDOWS_DISPLAY_CONFIG displayConfig)
         {
-            // Get the current windows display configs to compare to the one we loaded
-            WINDOWS_DISPLAY_CONFIG currentWindowsDisplayConfig = GetWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
-
             // Check whether the display config is in use now
             SharedLogger.logger.Trace($"WinLibrary/IsActiveConfig: Checking whether the display configuration is already being used.");
-            if (displayConfig.Equals(currentWindowsDisplayConfig))
+            if (displayConfig.Equals(ActiveDisplayConfig))
             {
                 SharedLogger.logger.Trace($"WinLibrary/IsActiveConfig: The display configuration is already being used (supplied displayConfig Equals currentWindowsDisplayConfig");
                 return true;
