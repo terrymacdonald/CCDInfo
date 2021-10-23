@@ -268,10 +268,11 @@ namespace DisplayMagicianShared.Windows
             SharedLogger.logger.Trace($"WinLibrary/UpdateActiveConfig: Updating the currently active config");
             try
             {
-                _activeConfig = GetWindowsDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS);
+                _activeConfig = GetActiveConfig();
             }
             catch (Exception ex)
             {
+                SharedLogger.logger.Trace(ex, $"WinLibrary/UpdateActiveConfig: Exception updating the currently active config");
                 return false;
             }
 
