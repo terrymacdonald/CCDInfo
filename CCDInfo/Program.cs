@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.2.2");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.2.3");
 
             
-            Console.WriteLine($"\nCCDInfo v1.2.2");
+            Console.WriteLine($"\nCCDInfo v1.2.3");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -108,27 +108,39 @@ namespace CCDInfo
                 else if (args[0] == "equal")
                 {
                     SharedLogger.logger.Debug($"CCDInfo/Main: The equal command was provided");
-                    if (args.Length != 3)
+                    if (args.Length == 3)
+                    {
+                        if (!File.Exists(args[1]))
+                        {
+                            Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it\n");
+                            SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                            Environment.Exit(1);
+                        }
+                        if (!File.Exists(args[2]))
+                        {
+                            Console.WriteLine($"ERROR - Couldn't find the file {args[2]} to check the settings from it\n");
+                            SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[2]} to check the settings from it");
+                            Environment.Exit(1);
+                        }
+                        equalFromFiles(args[1], args[2]);
+                    }
+                    else if (args.Length == 2)
+                    {
+                        if (!File.Exists(args[1]))
+                        {
+                            Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it\n");
+                            SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
+                            Environment.Exit(1);
+                        }
+                        equalFromFiles(args[1]);
+                    }
+                    else
                     {
                         Console.WriteLine($"ERROR - You need to provide two filenames in order for us to see if they are equal.");
                         Console.WriteLine($"        Equal means they are exactly the same.");
                         SharedLogger.logger.Error($"CCDInfo/Main: ERROR - You need to provide two filenames in order for us to see if they are equal.");
                         Environment.Exit(1);
                     }
-                    SharedLogger.logger.Debug($"CCDInfo/Main: showing if {args[1]} and {args[2]} are both a valid display config files as equals command was provided");
-                    if (!File.Exists(args[1]))
-                    {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[1]} to check the settings from it\n");
-                        SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[1]} to check the settings from it");
-                        Environment.Exit(1);
-                    }
-                    if (!File.Exists(args[2]))
-                    {
-                        Console.WriteLine($"ERROR - Couldn't find the file {args[2]} to check the settings from it\n");
-                        SharedLogger.logger.Error($"CCDInfo/Main: ERROR - Couldn't find the file {args[2]} to check the settings from it");
-                        Environment.Exit(1);
-                    }
-                    equalFromFiles(args[1], args[2]);
                 }
                 else if (args[0] == "currentids")
                 {
@@ -445,6 +457,62 @@ namespace CCDInfo
             {
                 SharedLogger.logger.Error($"CCDInfo/equalFromFile: The {filename} or {otherFilename} JSON files exist but at least one of them is empty! Cannot continue.");
                 Console.WriteLine($"CCDInfo/equalFromFile: The {filename} or {otherFilename} JSON files exist but at least one of them is empty! Cannot continue.");
+            }
+        }
+
+        static void equalFromFiles(string filename)
+        {
+            string json = "";
+            string otherJson = "";
+            WINDOWS_DISPLAY_CONFIG displayConfig = new WINDOWS_DISPLAY_CONFIG();
+            WINDOWS_DISPLAY_CONFIG otherDisplayConfig = WinLibrary.GetLibrary().GetActiveConfig();
+            SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Attempting to compare the display configuration from {filename} and the currently active display configuration to see if they are equal.");
+            try
+            {
+                json = File.ReadAllText(filename, Encoding.Unicode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to read the JSON file {filename} to memory but File.ReadAllTextthrew an exception.");
+                SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to read the JSON file {filename} to memory but File.ReadAllTextthrew an exception.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Contents exist within {filename} so trying to read them as JSON.");
+                    displayConfig = JsonConvert.DeserializeObject<WINDOWS_DISPLAY_CONFIG>(json, new JsonSerializerSettings
+                    {
+                        MissingMemberHandling = MissingMemberHandling.Ignore,
+                        NullValueHandling = NullValueHandling.Ignore,
+                        DefaultValueHandling = DefaultValueHandling.Include,
+                        TypeNameHandling = TypeNameHandling.Auto,
+                        ObjectCreationHandling = ObjectCreationHandling.Replace
+                    });
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Successfully parsed {filename} as JSON.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                    SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
+                }
+                if (displayConfig.Equals(otherDisplayConfig))
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The Windows display settings in {filename} and the currently active display configuration are equal.");
+                    Console.WriteLine($"The Windows display settings in {filename} and the currently active display configuration are equal.");
+                }
+                else
+                {
+                    SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The Windows display settings in {filename} and the currently active display configuration are NOT equal.");
+                    Console.WriteLine($"The Windows display settings in {filename} and the currently active display configuration are NOT equal.");
+                }
+
+            }
+            else
+            {
+                SharedLogger.logger.Error($"CCDInfo/equalFromFile: The {filename} JSON file exists but is empty! Cannot continue.");
+                Console.WriteLine($"CCDInfo/equalFromFile: The {filename} JSON file exists but is empty! Cannot continue.");
             }
         }
 
