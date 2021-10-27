@@ -566,7 +566,7 @@ namespace DisplayMagicianShared.Windows
 
         public bool Equals(DISPLAYCONFIG_PATH_TARGET_INFO other)
             => // AdapterId.Equals(other.AdapterId) && // Removed the AdapterId from the Equals, as it changes after reboot.
-                // Id == other.Id && // Removed as ID changes after reboot when the display is a cloned copy :(
+               // Id == other.Id && // Removed as ID changes after reboot when the display is a cloned copy :(
                 ModeInfoIdx == other.ModeInfoIdx &&
                 OutputTechnology.Equals(other.OutputTechnology) &&
                 Rotation.Equals(other.Rotation) &&
@@ -672,7 +672,7 @@ namespace DisplayMagicianShared.Windows
         {
             if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
                 return (InfoType, Id, TargetMode).GetHashCode();
-                //return (InfoType, TargetMode).GetHashCode();
+            //return (InfoType, TargetMode).GetHashCode();
 
             if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE)
                 //return (InfoType, Id, SourceMode).GetHashCode();
@@ -681,7 +681,7 @@ namespace DisplayMagicianShared.Windows
 
             if (InfoType == DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_DESKTOP_IMAGE)
                 return (InfoType, Id, DesktopImageInfo).GetHashCode();
-                //return (InfoType, DesktopImageInfo).GetHashCode();
+            //return (InfoType, DesktopImageInfo).GetHashCode();
 
             // otherwise we return everything
             return (InfoType, Id, TargetMode, SourceMode, DesktopImageInfo).GetHashCode();

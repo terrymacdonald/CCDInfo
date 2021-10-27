@@ -463,7 +463,6 @@ namespace CCDInfo
         static void equalFromFiles(string filename)
         {
             string json = "";
-            string otherJson = "";
             WINDOWS_DISPLAY_CONFIG displayConfig = new WINDOWS_DISPLAY_CONFIG();
             WINDOWS_DISPLAY_CONFIG otherDisplayConfig = WinLibrary.GetLibrary().GetActiveConfig();
             SharedLogger.logger.Trace($"CCDInfo/equalFromFile: Attempting to compare the display configuration from {filename} and the currently active display configuration to see if they are equal.");
