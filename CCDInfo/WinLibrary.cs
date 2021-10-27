@@ -62,6 +62,7 @@ namespace DisplayMagicianShared.Windows
         public override int GetHashCode()
         {
             return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates, GdiDisplaySettings, IsCloned, DisplayIdentifiers).GetHashCode();
+            //return (DisplayConfigPaths, DisplayConfigModes, DisplayHDRStates, IsCloned, DisplayIdentifiers).GetHashCode();
         }
         public static bool operator ==(WINDOWS_DISPLAY_CONFIG lhs, WINDOWS_DISPLAY_CONFIG rhs) => lhs.Equals(rhs);
 

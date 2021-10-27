@@ -425,13 +425,14 @@ namespace DisplayMagicianShared.Windows
             => Size == other.Size &&
                 // DeviceName == other.DeviceName && // Had to remove this as the device name often changes after a reboot!
                 DeviceString == other.DeviceString &&
-                StateFlags == other.StateFlags &&
+                //StateFlags == other.StateFlags &&
                 DeviceId == other.DeviceId &&
                 DeviceKey == other.DeviceKey;
 
         public override int GetHashCode()
         {
-            return (Size, DeviceName, DeviceString, StateFlags, DeviceId, DeviceKey).GetHashCode();
+            //return (Size, DeviceName, DeviceString, StateFlags, DeviceId, DeviceKey).GetHashCode();
+            return (Size, DeviceString, DeviceId, DeviceKey).GetHashCode();
         }
 
         public static bool operator ==(DISPLAY_DEVICE lhs, DISPLAY_DEVICE rhs) => lhs.Equals(rhs);
@@ -511,13 +512,14 @@ namespace DisplayMagicianShared.Windows
 
         public bool Equals(GDI_DISPLAY_SETTING other)
             => IsEnabled == other.IsEnabled &&
-                IsPrimary == other.IsPrimary &&
+                //IsPrimary == other.IsPrimary &&
                 Device.Equals(other.Device) &&
                 DeviceMode.Equals(other.DeviceMode);
 
         public override int GetHashCode()
         {
-            return (IsEnabled, IsPrimary, Device, DeviceMode).GetHashCode();
+            //return (IsEnabled, IsPrimary, Device, DeviceMode).GetHashCode();
+            return (IsEnabled, Device, DeviceMode).GetHashCode();
         }
 
         public static bool operator ==(GDI_DISPLAY_SETTING lhs, GDI_DISPLAY_SETTING rhs) => lhs.Equals(rhs);
