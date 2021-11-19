@@ -2,12 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
-using DisplayMagicianShared;
-using System.ComponentModel;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 namespace DisplayMagicianShared.Windows
 {
@@ -644,8 +640,8 @@ namespace DisplayMagicianShared.Windows
 
             // Now cycle through the paths and grab the HDR state information
             // and map the adapter name to adapter id
-            var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
-            int hdrInfoCount = 0;
+            //var hdrInfos = new ADVANCED_HDR_INFO_PER_PATH[pathCount];
+            //int hdrInfoCount = 0;
             foreach (var path in paths)
             {
                 // get display source name
@@ -704,9 +700,6 @@ namespace DisplayMagicianShared.Windows
             stringToReturn += $"\n";
 
             // Get the size of the largest Active Paths and Modes arrays
-            int pathCount = 0;
-            int modeCount = 0;
-
             foreach (var path in displayConfig.DisplayConfigPaths)
             {
                 stringToReturn += $"----++++==== Path ====++++----\n";
@@ -1006,11 +999,11 @@ namespace DisplayMagicianShared.Windows
 
             if (displayConfig.IsCloned)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have a cloned display in this display profile, so using the Windows GDI to set the layout");
+                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have a cloned display in this display profile");
             }
             else
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have no cloned displays in thus display profile, so using the Windows CCD to set the layout");
+                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: We have no cloned displays in thus display profile");
             }
 
             // Now we go through the Paths to update the LUIDs as per Soroush's suggestion
@@ -1019,46 +1012,6 @@ namespace DisplayMagicianShared.Windows
 
             uint myPathsCount = (uint)displayConfig.DisplayConfigPaths.Length;
             uint myModesCount = (uint)displayConfig.DisplayConfigModes.Length;
-            /*SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Testing whether the display configuration is valid");
-            // Test whether a specified display configuration is supported on the computer             
-            // Note: THe flags are different as we cannot use SDC_FORCE_MODE_ENUMERATION unless we're actually applying the config
-            WIN32STATUS err = CCDImport.SetDisplayConfig(myPathsCount, displayConfig.DisplayConfigPaths, myModesCount, displayConfig.DisplayConfigModes, SDC.DISPLAYMAGICIAN_VALIDATE);
-            if (err == WIN32STATUS.ERROR_SUCCESS)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Successfully validated that the display configuration supplied would work!");
-            }
-            else if (err == WIN32STATUS.ERROR_INVALID_PARAMETER)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The combination of parameters and flags specified is invalid. This display configuration won't work if applied.");
-                return false;
-            }
-            else if (err == WIN32STATUS.ERROR_NOT_SUPPORTED)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The system is not running a graphics driver that was written according to the Windows Display Driver Model (WDDM). The function is only supported on a system with a WDDM driver running. This display configuration won't work if applied.");
-                return false;
-            }
-            else if (err == WIN32STATUS.ERROR_ACCESS_DENIED)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The caller does not have access to the console session. This error occurs if the calling process does not have access to the current desktop or is running on a remote session. This display configuration won't work if applied.");
-                return false;
-            }
-            else if (err == WIN32STATUS.ERROR_GEN_FAILURE)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: An unspecified error occurred. This display configuration won't work if applied.");
-                return false;
-            }
-            else if (err == WIN32STATUS.ERROR_BAD_CONFIGURATION)
-            {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The function could not find a workable solution for the source and target modes that the caller did not specify. This display configuration won't work if applied.");
-                return false;
-            }
-            else
-            {                
-                SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: SetDisplayConfig couldn't validate the display configuration supplied. This display configuration won't work if applied.");
-                return false;
-            }
-            SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Yay! The display configuration is valid! Attempting to set the Display Config now");*/
-
 
             // Now set the specified display configuration for this computer                    
             WIN32STATUS err = CCDImport.SetDisplayConfig(myPathsCount, displayConfig.DisplayConfigPaths, myModesCount, displayConfig.DisplayConfigModes, SDC.DISPLAYMAGICIAN_SET | SDC.SDC_FORCE_MODE_ENUMERATION);
@@ -1068,27 +1021,97 @@ namespace DisplayMagicianShared.Windows
             }
             else if (err == WIN32STATUS.ERROR_INVALID_PARAMETER)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The combination of parameters and flags specified is invalid. Display configuration not applied.");
-                return false;
+                SharedLogger.logger.Warn($"WinLibrary/SetActiveConfig: The combination of parameters and flags specified is invalid. Display configuration not applied. So trying again without SDC_FORCE_MODE_ENUMERATION as that works on some computers.");
+                // Try it again, because in some systems it doesn't work at the first try
+                err = CCDImport.SetDisplayConfig(myPathsCount, displayConfig.DisplayConfigPaths, myModesCount, displayConfig.DisplayConfigModes, SDC.DISPLAYMAGICIAN_SET);
+                if (err == WIN32STATUS.ERROR_SUCCESS)
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Retry. Successfully set the display configuration to the settings supplied!");
+                }
+                else if (err == WIN32STATUS.ERROR_INVALID_PARAMETER)
+                {
+                    SharedLogger.logger.Warn($"WinLibrary/SetActiveConfig: Retry. The combination of parameters and flags specified is invalid. Display configuration not applied. So trying again without any specific data other than the topology as that works on some computers.");
+                    // Try it again, because in some systems it doesn't work at the 2nd try! This is a fallback mode just to get something on the screen!
+                    err = CCDImport.SetDisplayConfig(myPathsCount, displayConfig.DisplayConfigPaths, myModesCount, displayConfig.DisplayConfigModes, SDC.SDC_APPLY | SDC.SDC_TOPOLOGY_SUPPLIED | SDC.SDC_ALLOW_CHANGES | SDC.SDC_ALLOW_PATH_ORDER_CHANGES);
+                    if (err == WIN32STATUS.ERROR_SUCCESS)
+                    {
+                        SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Retry 2. Successfully set the display configuration to the settings supplied!");
+                    }
+                    else if (err == WIN32STATUS.ERROR_INVALID_PARAMETER)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. The combination of parameters and flags specified is invalid. Display configuration not applied.");
+                        return false;
+                    }
+                    else if (err == WIN32STATUS.ERROR_NOT_SUPPORTED)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. The system is not running a graphics driver that was written according to the Windows Display Driver Model (WDDM). The function is only supported on a system with a WDDM driver running. Display configuration not applied.");
+                        return false;
+                    }
+                    else if (err == WIN32STATUS.ERROR_ACCESS_DENIED)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. The caller does not have access to the console session. This error occurs if the calling process does not have access to the current desktop or is running on a remote session. Display configuration not applied.");
+                        return false;
+                    }
+                    else if (err == WIN32STATUS.ERROR_GEN_FAILURE)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. An unspecified error occurred. Display configuration not applied.");
+                        return false;
+                    }
+                    else if (err == WIN32STATUS.ERROR_BAD_CONFIGURATION)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. The function could not find a workable solution for the source and target modes that the caller did not specify. Display configuration not applied.");
+                        return false;
+                    }
+                    else
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry 2. SetDisplayConfig couldn't set the display configuration using the settings supplied. Display configuration not applied.");
+                        return false;
+                    }
+                }
+                else if (err == WIN32STATUS.ERROR_NOT_SUPPORTED)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry. The system is not running a graphics driver that was written according to the Windows Display Driver Model (WDDM). The function is only supported on a system with a WDDM driver running. Display configuration not applied.");
+                    return false;
+                }
+                else if (err == WIN32STATUS.ERROR_ACCESS_DENIED)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry. The caller does not have access to the console session. This error occurs if the calling process does not have access to the current desktop or is running on a remote session. Display configuration not applied.");
+                    return false;
+                }
+                else if (err == WIN32STATUS.ERROR_GEN_FAILURE)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry. An unspecified error occurred. Display configuration not applied.");
+                    return false;
+                }
+                else if (err == WIN32STATUS.ERROR_BAD_CONFIGURATION)
+                {
+                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry. The function could not find a workable solution for the source and target modes that the caller did not specify. Display configuration not applied.");
+                    return false;
+                }
+                else
+                {
+                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Retry. SetDisplayConfig couldn't set the display configuration using the settings supplied. Display configuration not applied.");
+                    return false;
+                }
             }
             else if (err == WIN32STATUS.ERROR_NOT_SUPPORTED)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The system is not running a graphics driver that was written according to the Windows Display Driver Model (WDDM). The function is only supported on a system with a WDDM driver running. Display configuration not applied.");
+                SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: The system is not running a graphics driver that was written according to the Windows Display Driver Model (WDDM). The function is only supported on a system with a WDDM driver running. Display configuration not applied.");
                 return false;
             }
             else if (err == WIN32STATUS.ERROR_ACCESS_DENIED)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The caller does not have access to the console session. This error occurs if the calling process does not have access to the current desktop or is running on a remote session. Display configuration not applied.");
+                SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: The caller does not have access to the console session. This error occurs if the calling process does not have access to the current desktop or is running on a remote session. Display configuration not applied.");
                 return false;
             }
             else if (err == WIN32STATUS.ERROR_GEN_FAILURE)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: An unspecified error occurred. Display configuration not applied.");
+                SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: An unspecified error occurred. Display configuration not applied.");
                 return false;
             }
             else if (err == WIN32STATUS.ERROR_BAD_CONFIGURATION)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The function could not find a workable solution for the source and target modes that the caller did not specify. Display configuration not applied.");
+                SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: The function could not find a workable solution for the source and target modes that the caller did not specify. Display configuration not applied.");
                 return false;
             }
             else
@@ -1102,6 +1125,8 @@ namespace DisplayMagicianShared.Windows
             SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Waiting 0.5 seconds to let the display change take place before adjusting the Windows CCD HDR settings");
             System.Threading.Thread.Sleep(500);
 
+            // NOTE: There is currently no way within Windows CCD API to set the HDR settings to any particular setting
+            // This code will only turn on the HDR setting.
             foreach (ADVANCED_HDR_INFO_PER_PATH myHDRstate in displayConfig.DisplayHDRStates)
             {
                 SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Trying to get information whether HDR color is in use now on Display {myHDRstate.Id}.");
@@ -1116,9 +1141,10 @@ namespace DisplayMagicianShared.Windows
                 {
                     SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Advanced Color Info gathered from Display {myHDRstate.Id}");
 
-                    if (myHDRstate.AdvancedColorInfo.AdvancedColorSupported && colorInfo.AdvancedColorEnabled != myHDRstate.AdvancedColorInfo.AdvancedColorEnabled)
+                    if (myHDRstate.AdvancedColorInfo.AdvancedColorEnabled != colorInfo.AdvancedColorEnabled)
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.AdvancedColorEnabled} but is currently {colorInfo.AdvancedColorEnabled}.");
+                        SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: HDR is available for use on Display {myHDRstate.Id}, and we want it set to {myHDRstate.AdvancedColorInfo.BitsPerColorChannel} but is currently {colorInfo.AdvancedColorEnabled}.");
+
 
                         var setColorState = new DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE();
                         setColorState.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
@@ -1149,7 +1175,8 @@ namespace DisplayMagicianShared.Windows
 
             }
 
-            // Get the existing displays
+
+            // Get the existing displays config
             Dictionary<string, GDI_DISPLAY_SETTING> currentGdiDisplaySettings = GetGdiDisplaySettings();
 
             // Apply the previously saved display settings to the new displays (match them up)
@@ -1223,6 +1250,7 @@ namespace DisplayMagicianShared.Windows
                     SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Display {displayDeviceKey} is not currently in use, so cannot set it!");
                 }
             }
+
 
             return true;
         }
