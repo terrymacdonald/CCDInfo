@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.3.4");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.3.8");
 
             
-            Console.WriteLine($"\nCCDInfo v1.3.4");
+            Console.WriteLine($"\nCCDInfo v1.3.8");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2021\n");
 
@@ -206,6 +206,10 @@ namespace CCDInfo
             Console.WriteLine($"\t'CCDInfo save myfilename.cfg' will save your current display setting to the myfilename.cfg file.");
             Console.WriteLine($"\t'CCDInfo load myfilename.cfg' will load and apply the display setting in the myfilename.cfg file.");
             Console.WriteLine($"\t'CCDInfo possible myfilename.cfg' will test the display setting in the myfilename.cfg file to see\n\t\tif it is possible to use that display profile now.");
+            Console.WriteLine($"\t'CCDInfo equal myfilename.cfg' will test if the display setting in the myfilename.cfg is equal to\n\t\tthe one in use.");
+            Console.WriteLine($"\t'CCDInfo equal myfilename.cfg myother.cfg' will test if the display setting in the myfilename.cfg\n\t\tis equal to the one in myother.cfg.");
+            Console.WriteLine($"\t'CCDInfo currentids' will display the display identifiers for all active displays.");
+            Console.WriteLine($"\t'CCDInfo allids' will display the display identifiers for all displays that are active or can be \n\t\tmade active.");
             Console.WriteLine($"\nUse DisplayMagician to store display settings for each game you have. https://github.com/terrymacdonald/DisplayMagician\n");
         }
 
