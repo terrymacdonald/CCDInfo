@@ -7,9 +7,14 @@ using System.Text.RegularExpressions;
 using DisplayMagicianShared;
 using System.IO;
 using System.ComponentModel;
+using Microsoft.Win32;
+using System.Threading.Tasks;
+using static DisplayMagicianShared.Windows.TaskBarLayout;
+using System.Diagnostics;
 
 namespace DisplayMagicianShared.Windows
 {
+
     [StructLayout(LayoutKind.Sequential)]
     public struct ADVANCED_HDR_INFO_PER_PATH : IEquatable<ADVANCED_HDR_INFO_PER_PATH>
     {
@@ -35,6 +40,27 @@ namespace DisplayMagicianShared.Windows
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct DISPLAY_SOURCE : IEquatable<DISPLAY_SOURCE>
+    {
+        public LUID AdapterId;
+        public UInt32 SourceId;
+        public UInt32 TargetId;
+        public string DevicePath;
+
+        public override bool Equals(object obj) => obj is DISPLAY_SOURCE other && this.Equals(other);
+        public bool Equals(DISPLAY_SOURCE other)
+        => true;
+        public override int GetHashCode()
+        {
+            return 300;
+        }
+
+        public static bool operator ==(DISPLAY_SOURCE lhs, DISPLAY_SOURCE rhs) => lhs.Equals(rhs);
+
+        public static bool operator !=(DISPLAY_SOURCE lhs, DISPLAY_SOURCE rhs) => !(lhs == rhs);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct WINDOWS_DISPLAY_CONFIG : IEquatable<WINDOWS_DISPLAY_CONFIG>
     {
         public Dictionary<ulong, string> DisplayAdapters;
@@ -42,13 +68,13 @@ namespace DisplayMagicianShared.Windows
         public DISPLAYCONFIG_MODE_INFO[] DisplayConfigModes;
         public List<ADVANCED_HDR_INFO_PER_PATH> DisplayHDRStates;
         public Dictionary<string, GDI_DISPLAY_SETTING> GdiDisplaySettings;
-        public List<TaskBarStuckRectangle> TaskBarLayout;
+        public Dictionary<string, TaskBarLayout> TaskBarLayout;
         public TaskBarSettings TaskBarSettings;
         public bool IsCloned;
         // Note: We purposely have left out the DisplaySources from the Equals as it's order keeps changing after each reboot and after each profile swap
         // and it is informational only and doesn't contribute to the configuration (it's used for generating the Screens structure, and therefore for
         // generating the profile icon.
-        public Dictionary<string, List<uint>> DisplaySources;
+        public Dictionary<string, List<DISPLAY_SOURCE>> DisplaySources;
         public List<string> DisplayIdentifiers;
 
         public override bool Equals(object obj) => obj is WINDOWS_DISPLAY_CONFIG other && this.Equals(other);
@@ -61,9 +87,12 @@ namespace DisplayMagicianShared.Windows
            // Additionally, we had to disable the DEviceKey from the equality testing within the GDI library itself as that waould also change after changing back from NVIDIA surround
            // This still allows us to detect when refresh rates change, which will allow DisplayMagician to detect profile differences.
            GdiDisplaySettings.Values.SequenceEqual(other.GdiDisplaySettings.Values) &&
-           DisplayIdentifiers.SequenceEqual(other.DisplayIdentifiers) &&
-           TaskBarLayout.SequenceEqual(other.TaskBarLayout) &&
-           TaskBarSettings.Equals(other.TaskBarSettings);
+           DisplayIdentifiers.SequenceEqual(other.DisplayIdentifiers);
+        // NOTE: I have disabled the TaskBar specific matching for now due to errors I cannot fix
+        // WinLibrary will still track the location of the taskbars, but won't actually set them as the setting of the taskbars doesnt work at the moment.
+        /*&&
+        TaskBarLayout.SequenceEqual(other.TaskBarLayout) &&
+        TaskBarSettings.Equals(other.TaskBarSettings);*/
 
         public override int GetHashCode()
         {
@@ -84,6 +113,7 @@ namespace DisplayMagicianShared.Windows
 
         private bool _initialised = false;
         private WINDOWS_DISPLAY_CONFIG _activeDisplayConfig;
+        public List<DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY> SkippedColorConnectionTypes;
 
         // To detect redundant calls
         private bool _disposed = false;
@@ -94,6 +124,15 @@ namespace DisplayMagicianShared.Windows
         static WinLibrary() { }
         public WinLibrary()
         {
+            // Populate the list of ConnectionTypes we want to skip as they don't support querying
+            SkippedColorConnectionTypes = new List<DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY> {
+                DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HD15,
+                DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_COMPONENT_VIDEO,
+                DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_COMPOSITE_VIDEO,
+                DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DVI,
+                DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_SVIDEO
+            };
+
             SharedLogger.logger.Trace("WinLibrary/WinLibrary: Intialising Windows CCD library interface");
             _initialised = true;
             _activeDisplayConfig = GetActiveConfig();
@@ -167,9 +206,9 @@ namespace DisplayMagicianShared.Windows
             myDefaultConfig.DisplayConfigPaths = new DISPLAYCONFIG_PATH_INFO[0];
             myDefaultConfig.DisplayHDRStates = new List<ADVANCED_HDR_INFO_PER_PATH>();
             myDefaultConfig.DisplayIdentifiers = new List<string>();
-            myDefaultConfig.DisplaySources = new Dictionary<string, List<uint>>();
+            myDefaultConfig.DisplaySources = new Dictionary<string, List<DISPLAY_SOURCE>>();
             myDefaultConfig.GdiDisplaySettings = new Dictionary<string, GDI_DISPLAY_SETTING>();
-            myDefaultConfig.TaskBarLayout = new List<TaskBarStuckRectangle>();
+            myDefaultConfig.TaskBarLayout = new Dictionary<string, TaskBarLayout>();
             myDefaultConfig.TaskBarSettings = new TaskBarSettings();
             myDefaultConfig.IsCloned = false;
 
@@ -181,102 +220,181 @@ namespace DisplayMagicianShared.Windows
 
             Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
             Dictionary<ulong, string> currentAdapterMap = GetCurrentAdapterIDs();
-
-            SharedLogger.logger.Trace("WinLibrary/PatchAdapterIDs: Going through the list of adapters we stored in the config to figure out the old adapterIDs");
-            foreach (KeyValuePair<ulong, string> savedAdapter in savedDisplayConfig.DisplayAdapters)
+            try
             {
-                bool adapterMatched = false;
-                foreach (KeyValuePair<ulong, string> currentAdapter in currentAdapterMap)
+                SharedLogger.logger.Trace("WinLibrary/PatchAdapterIDs: Going through the list of adapters we stored in the config to figure out the old adapterIDs");
+                foreach (KeyValuePair<ulong, string> savedAdapter in savedDisplayConfig.DisplayAdapters)
                 {
-                    SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Checking if saved adapter {savedAdapter.Key} (AdapterName is {savedAdapter.Value}) is equal to current adapter id {currentAdapter.Key} (AdapterName is {currentAdapter.Value})");
-
-                    if (currentAdapter.Value.Equals(savedAdapter.Value))
+                    bool adapterMatched = false;
+                    foreach (KeyValuePair<ulong, string> currentAdapter in currentAdapterMap)
                     {
-                        // we have found the new LUID Value for the same adapter
-                        // So we want to store it
-                        SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: We found that saved adapter {savedAdapter.Key} has now been assigned adapter id {currentAdapter.Key} (AdapterName is {savedAdapter.Value})");
-                        adapterOldToNewMap.Add(savedAdapter.Key, currentAdapter.Key);
-                        adapterMatched = true;
+                        SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Checking if saved adapter {savedAdapter.Key} (AdapterName is {savedAdapter.Value}) is equal to current adapter id {currentAdapter.Key} (AdapterName is {currentAdapter.Value})");
+
+                        if (currentAdapter.Value.Equals(savedAdapter.Value))
+                        {
+                            // we have found the new LUID Value for the same adapter
+                            // So we want to store it
+                            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: We found that saved adapter {savedAdapter.Key} has now been assigned adapter id {currentAdapter.Key} (AdapterName is {savedAdapter.Value})");
+                            adapterOldToNewMap.Add(savedAdapter.Key, currentAdapter.Key);
+                            adapterMatched = true;
+                        }
+                    }
+                    if (!adapterMatched)
+                    {
+                        SharedLogger.logger.Error($"WinLibrary/PatchAdapterIDs: Saved adapter {savedAdapter.Key} (AdapterName is {savedAdapter.Value}) doesn't have a current match! The adapters have changed since the configuration was last saved.");
                     }
                 }
-                if (!adapterMatched)
-                {
-                    SharedLogger.logger.Error($"WinLibrary/PatchAdapterIDs: Saved adapter {savedAdapter.Key} (AdapterName is {savedAdapter.Value}) doesn't have a current match! The adapters have changed since the configuration was last saved.");
-                }
+            }
+            catch (Exception ex)
+            {
+                SharedLogger.logger.Error(ex, "WinLibrary/PatchAdapterIDs: Exception while going through the list of adapters we stored in the config to figure out the old adapterIDs");
             }
 
             ulong newAdapterValue = 0;
-            // Update the paths with the current adapter id
-            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config paths to update the adapter id");
-            for (int i = 0; i < savedDisplayConfig.DisplayConfigPaths.Length; i++)
+
+            try
             {
-                // Change the Path SourceInfo and TargetInfo AdapterIDs
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value))
+                // Update the paths with the current adapter id
+                SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config paths to update the adapter id");
+                for (int i = 0; i < savedDisplayConfig.DisplayConfigPaths.Length; i++)
                 {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value];
-                    savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId.Value];
-                    savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
-                    savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                    // Change the Path SourceInfo and TargetInfo AdapterIDs
+                    if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value))
+                    {
+                        // We get here if there is a matching adapter
+                        newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value];
+                        savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                        newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId.Value];
+                        savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                        SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Updated DisplayConfig Path #{i} from adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} to adapter {newAdapterValue} instead.");
+                    }
+                    else
+                    {
+                        // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                        // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                        newAdapterValue = currentAdapterMap.First().Key;
+                        SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
+                        savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                        savedDisplayConfig.DisplayConfigPaths[i].TargetInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                    }
                 }
             }
-
-            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config modes to update the adapter id");
-            // Update the modes with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.DisplayConfigModes.Length; i++)
+            catch (Exception ex)
             {
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value))
-                {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value];
-                    savedDisplayConfig.DisplayConfigModes[i].AdapterId = AdapterValueToLUID(newAdapterValue);
-                }
-                else
-                {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
-                    savedDisplayConfig.DisplayConfigModes[i].AdapterId = AdapterValueToLUID(newAdapterValue);
-                }
+                SharedLogger.logger.Error(ex, "WinLibrary/PatchAdapterIDs: Exception while going through the display config paths to update the adapter id");
             }
 
-            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config HDR info to update the adapter id");
-            // Update the HDRInfo with the current adapter id
-            for (int i = 0; i < savedDisplayConfig.DisplayHDRStates.Count; i++)
+
+            try
             {
-                ADVANCED_HDR_INFO_PER_PATH hdrInfo = savedDisplayConfig.DisplayHDRStates[i];
-                // Change the Mode AdapterID
-                if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value))
+                SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config modes to update the adapter id");
+                // Update the modes with the current adapter id
+                for (int i = 0; i < savedDisplayConfig.DisplayConfigModes.Length; i++)
                 {
-                    // We get here if there is a matching adapter
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value];
-                    hdrInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].AdvancedColorInfo.Header.AdapterId.Value];
-                    hdrInfo.AdvancedColorInfo.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].SDRWhiteLevel.Header.AdapterId.Value];
-                    hdrInfo.SDRWhiteLevel.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                    // Change the Mode AdapterID
+                    if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value))
+                    {
+                        // We get here if there is a matching adapter
+                        newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value];
+                        savedDisplayConfig.DisplayConfigModes[i].AdapterId = AdapterValueToLUID(newAdapterValue);
+                        SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Updated DisplayConfig Mode #{i} from adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} to adapter {newAdapterValue} instead.");
+                    }
+                    else
+                    {
+                        // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                        // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                        newAdapterValue = currentAdapterMap.First().Key;
+                        SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayConfigModes[i].AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
+                        savedDisplayConfig.DisplayConfigModes[i].AdapterId = AdapterValueToLUID(newAdapterValue);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SharedLogger.logger.Error(ex, "WinLibrary/PatchAdapterIDs: Exception while going through the display config modes to update the adapter id");
+            }
+
+
+            try
+            {
+                SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display config HDR info to update the adapter id");
+                if (savedDisplayConfig.DisplayHDRStates.Count > 0)
+                {
+                    // Update the HDRInfo with the current adapter id
+                    for (int i = 0; i < savedDisplayConfig.DisplayHDRStates.Count; i++)
+                    {
+                        ADVANCED_HDR_INFO_PER_PATH hdrInfo = savedDisplayConfig.DisplayHDRStates[i];
+                        // Change the Mode AdapterID
+                        if (adapterOldToNewMap.ContainsKey(savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value))
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: adapterOldToNewMap contains adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} so using the new adapter ID of {newAdapterValue} instead.");
+                            // We get here if there is a matching adapter
+                            newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value];
+                            hdrInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].AdvancedColorInfo.Header.AdapterId.Value];
+                            hdrInfo.AdvancedColorInfo.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            newAdapterValue = adapterOldToNewMap[savedDisplayConfig.DisplayHDRStates[i].SDRWhiteLevel.Header.AdapterId.Value];
+                            hdrInfo.SDRWhiteLevel.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Updated Display HDR state #{i} from adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} to adapter {newAdapterValue} instead.");
+                        }
+                        else
+                        {
+                            // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                            // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                            newAdapterValue = currentAdapterMap.First().Key;
+                            SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
+                            hdrInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            hdrInfo.AdvancedColorInfo.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            hdrInfo.SDRWhiteLevel.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                        }
+                    }
                 }
                 else
                 {
-                    // if there isn't a matching adapter, then we just pick the first current one and hope that works!
-                    // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
-                    newAdapterValue = currentAdapterMap.First().Key;
-                    SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value} didn't have a current match! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
-                    hdrInfo.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    hdrInfo.AdvancedColorInfo.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
-                    hdrInfo.SDRWhiteLevel.Header.AdapterId = AdapterValueToLUID(newAdapterValue);
+                    SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: There are no Display HDR states to update. Skipping.");
                 }
+            }
+            catch (Exception ex)
+            {
+                SharedLogger.logger.Error(ex, "WinLibrary/PatchAdapterIDs: Exception while going through the display config HDR info to update the adapter id");
+            }
+
+
+            try
+            {
+                SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Going through the display sources list info to update the adapter id");
+                // Update the DisplaySources with the current adapter id
+                for (int i = 0; i < savedDisplayConfig.DisplaySources.Count; i++)
+                {
+                    List<DISPLAY_SOURCE> dsList = savedDisplayConfig.DisplaySources.ElementAt(i).Value;
+                    if (dsList.Count > 0)
+                    {
+                        for (int j = 0; j < dsList.Count; j++)
+                        {
+                            DISPLAY_SOURCE ds = dsList[j];
+                            // Change the Display Source AdapterID
+                            if (adapterOldToNewMap.ContainsKey(ds.AdapterId.Value))
+                            {
+                                // We get here if there is a matching adapter
+                                newAdapterValue = adapterOldToNewMap[ds.AdapterId.Value];
+                                ds.AdapterId = AdapterValueToLUID(newAdapterValue);
+                                SharedLogger.logger.Trace($"WinLibrary/PatchAdapterIDs: Updated DisplaySource #{i} from adapter {savedDisplayConfig.DisplayConfigPaths[i].SourceInfo.AdapterId.Value} to adapter {newAdapterValue} instead.");
+                            }
+                            else
+                            {
+                                // if there isn't a matching adapter, then we just pick the first current one and hope that works!
+                                // (it is highly likely to... its only if the user has multiple graphics cards with some weird config it may break)
+                                newAdapterValue = currentAdapterMap.First().Key;
+                                SharedLogger.logger.Warn($"WinLibrary/PatchAdapterIDs: Uh Oh. Adapter {savedDisplayConfig.DisplayHDRStates[i].AdapterId.Value} didn't have a current match in Display Sources! It's possible the adapter was swapped or disabled. Attempting to use adapter {newAdapterValue} instead.");
+                                ds.AdapterId = AdapterValueToLUID(newAdapterValue);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SharedLogger.logger.Error(ex, "WinLibrary/PatchAdapterIDs: Exception while going through the display sources list info to update the adapter id");
             }
 
         }
@@ -307,6 +425,10 @@ namespace DisplayMagicianShared.Windows
 
         private WINDOWS_DISPLAY_CONFIG GetWindowsDisplayConfig(QDC selector = QDC.QDC_ONLY_ACTIVE_PATHS | QDC.QDC_INCLUDE_HMD)
         {
+
+            // Prepare the empty windows display config
+            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = CreateDefaultConfig();
+
             // Get the size of the largest Active Paths and Modes arrays
             SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Getting the size of the largest Active Paths and Modes arrays");
             int pathCount = 0;
@@ -355,12 +477,6 @@ namespace DisplayMagicianShared.Windows
                 throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays.");
             }
 
-            // Prepare the empty windows display config
-            WINDOWS_DISPLAY_CONFIG windowsDisplayConfig = new WINDOWS_DISPLAY_CONFIG();
-            windowsDisplayConfig.DisplayAdapters = new Dictionary<ulong, string>();
-            windowsDisplayConfig.DisplayHDRStates = new List<ADVANCED_HDR_INFO_PER_PATH>();
-            windowsDisplayConfig.DisplaySources = new Dictionary<string, List<uint>>();
-            windowsDisplayConfig.IsCloned = false;
 
             // First of all generate the current displayIdentifiers
             windowsDisplayConfig.DisplayIdentifiers = GetCurrentDisplayIdentifiers();
@@ -380,6 +496,7 @@ namespace DisplayMagicianShared.Windows
 
             // Now cycle through the paths and grab the HDR state information
             // and map the adapter name to adapter id
+            // and populate the display source information
             List<uint> targetPathIdsToChange = new List<uint>();
             List<uint> targetModeIdsToChange = new List<uint>();
             List<uint> targetIdsFound = new List<uint>();
@@ -419,7 +536,11 @@ namespace DisplayMagicianShared.Windows
                     if (windowsDisplayConfig.DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
                     {
                         // We already have at least one display using this source, so we need to add the other cloned display to the existing list
-                        windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(paths[i].SourceInfo.Id);
+                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                        ds.SourceId = paths[i].SourceInfo.Id;
+                        ds.TargetId = paths[i].TargetInfo.Id;
+                        windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(ds);
                         isClonedPath = true;
                         isClonedProfile = true;
                         windowsDisplayConfig.IsCloned = true;
@@ -427,9 +548,13 @@ namespace DisplayMagicianShared.Windows
                     else
                     {
                         // This is the first display to use this source
-                        List<uint> sourceIds = new List<uint>();
-                        sourceIds.Add(paths[i].SourceInfo.Id);
-                        windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sourceIds);
+                        List<DISPLAY_SOURCE> sources = new List<DISPLAY_SOURCE>();
+                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                        ds.SourceId = paths[i].SourceInfo.Id;
+                        ds.TargetId = paths[i].TargetInfo.Id;
+                        sources.Add(ds);
+                        windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sources);
                     }
 
                     SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id}.");
@@ -481,70 +606,78 @@ namespace DisplayMagicianShared.Windows
 
                 // Get advanced color info
                 SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get advanced color info for display {paths[i].TargetInfo.Id}.");
-                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                colorInfo.Header.AdapterId = paths[i].TargetInfo.AdapterId;
-                colorInfo.Header.Id = paths[i].TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
-                if (err == WIN32STATUS.ERROR_SUCCESS)
+
+                // We need to skip recording anything from a connection that doesn't support color communication
+                if (!SkippedColorConnectionTypes.Contains(paths[i].TargetInfo.OutputTechnology))
                 {
-                    gotAdvancedColorInfo = true;
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found color info for display {paths[i].TargetInfo.Id}.");
-                    if (colorInfo.AdvancedColorSupported)
+                    var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
+                    colorInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+                    colorInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
+                    colorInfo.Header.AdapterId = paths[i].TargetInfo.AdapterId;
+                    colorInfo.Header.Id = paths[i].TargetInfo.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref colorInfo);
+                    if (err == WIN32STATUS.ERROR_SUCCESS)
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is supported for display {paths[i].TargetInfo.Id}.");
+                        gotAdvancedColorInfo = true;
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found color info for display {paths[i].TargetInfo.Id}.");
+                        if (colorInfo.AdvancedColorSupported)
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is supported for display {paths[i].TargetInfo.Id}.");
+                        }
+                        else
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is NOT supported for display {paths[i].TargetInfo.Id}.");
+                        }
+                        if (colorInfo.AdvancedColorEnabled)
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is enabled for display {paths[i].TargetInfo.Id}.");
+                        }
+                        else
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is NOT enabled for display {paths[i].TargetInfo.Id}.");
+                        }
                     }
                     else
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is NOT supported for display {paths[i].TargetInfo.Id}.");
+                        SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get advanced color settings for display {paths[i].TargetInfo.Id}.");
                     }
-                    if (colorInfo.AdvancedColorEnabled)
+
+                    // get SDR white levels
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get SDR white levels for display {paths[i].TargetInfo.Id}.");
+                    var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
+                    whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+                    whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
+                    whiteLevelInfo.Header.AdapterId = paths[i].TargetInfo.AdapterId;
+                    whiteLevelInfo.Header.Id = paths[i].TargetInfo.Id;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
+                    if (err == WIN32STATUS.ERROR_SUCCESS)
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is enabled for display {paths[i].TargetInfo.Id}.");
+                        gotSdrWhiteLevel = true;
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found SDR White levels for display {paths[i].TargetInfo.Id}.");
                     }
                     else
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: HDR is NOT enabled for display {paths[i].TargetInfo.Id}.");
+                        SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get SDR White levels for display {paths[i].TargetInfo.Id}.");
+                    }
+
+                    // Only create and add the ADVANCED_HDR_INFO_PER_PATH if the info is there
+                    if (gotAdvancedColorInfo)
+                    {
+                        ADVANCED_HDR_INFO_PER_PATH hdrInfo = new ADVANCED_HDR_INFO_PER_PATH();
+                        hdrInfo.AdapterId = paths[i].TargetInfo.AdapterId;
+                        hdrInfo.Id = paths[i].TargetInfo.Id;
+                        hdrInfo.AdvancedColorInfo = colorInfo;
+                        if (gotSdrWhiteLevel)
+                        {
+                            hdrInfo.SDRWhiteLevel = whiteLevelInfo;
+                        }
+                        windowsDisplayConfig.DisplayHDRStates.Add(hdrInfo);
                     }
                 }
                 else
                 {
-                    SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get advanced color settings for display {paths[i].TargetInfo.Id}.");
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipping getting HDR and SDR White levels information as display {paths[i].TargetInfo.Id} uses a {paths[i].TargetInfo.OutputTechnology} connector that doesn't support HDR.");
                 }
-
-                // get SDR white levels
-                SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get SDR white levels for display {paths[i].TargetInfo.Id}.");
-                var whiteLevelInfo = new DISPLAYCONFIG_SDR_WHITE_LEVEL();
-                whiteLevelInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
-                whiteLevelInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_SDR_WHITE_LEVEL>();
-                whiteLevelInfo.Header.AdapterId = paths[i].TargetInfo.AdapterId;
-                whiteLevelInfo.Header.Id = paths[i].TargetInfo.Id;
-                err = CCDImport.DisplayConfigGetDeviceInfo(ref whiteLevelInfo);
-                if (err == WIN32STATUS.ERROR_SUCCESS)
-                {
-                    gotSdrWhiteLevel = true;
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found SDR White levels for display {paths[i].TargetInfo.Id}.");
-                }
-                else
-                {
-                    SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get SDR White levels for display {paths[i].TargetInfo.Id}.");
-                }
-
-                // Only create and add the ADVANCED_HDR_INFO_PER_PATH if the info is there
-                if (gotAdvancedColorInfo)
-                {
-                    ADVANCED_HDR_INFO_PER_PATH hdrInfo = new ADVANCED_HDR_INFO_PER_PATH();
-                    hdrInfo.AdapterId = paths[i].TargetInfo.AdapterId;
-                    hdrInfo.Id = paths[i].TargetInfo.Id;
-                    hdrInfo.AdvancedColorInfo = colorInfo;
-                    if (gotSdrWhiteLevel)
-                    {
-                        hdrInfo.SDRWhiteLevel = whiteLevelInfo;
-                    }
-                    windowsDisplayConfig.DisplayHDRStates.Add(hdrInfo);
-                }
-
             }
 
 
@@ -597,12 +730,58 @@ namespace DisplayMagicianShared.Windows
                         modes[i].Id = targetIdMap[modes[i].Id];
                     }
                 }
+
+                // And then we need to go through the list of display sources and patch the 'cloned' displays with a real display ID so the display layout is right in cloned displays
+                for (int i = 0; i < windowsDisplayConfig.DisplaySources.Count; i++)
+                {
+                    string key = windowsDisplayConfig.DisplaySources.ElementAt(i).Key;
+                    DISPLAY_SOURCE[] dsList = windowsDisplayConfig.DisplaySources.ElementAt(i).Value.ToArray();
+                    for (int j = 0; j < dsList.Length; j++)
+                    {
+                        // We only change the ids that match in InfoType for target displays
+                        if (targetIdMap.ContainsKey(dsList[j].TargetId))
+                        {
+                            // Patch the cloned ids with a real working one!
+                            dsList[j].TargetId = targetIdMap[dsList[j].TargetId];
+
+                        }
+                    }
+                    windowsDisplayConfig.DisplaySources[key] = dsList.ToList();
+                }
             }
 
+            // Now we need to find the DevicePaths for the DisplaySources (as at this point the cloned display sources have been corrected)
+            for (int i = 0; i < windowsDisplayConfig.DisplaySources.Count; i++)
+            {
+                string key = windowsDisplayConfig.DisplaySources.ElementAt(i).Key;
+                DISPLAY_SOURCE[] dsList = windowsDisplayConfig.DisplaySources.ElementAt(i).Value.ToArray();
+                for (int j = 0; j < dsList.Length; j++)
+                {
+                    // get display target name
+                    var targetInfo = new DISPLAYCONFIG_TARGET_DEVICE_NAME();
+                    targetInfo.Header.Type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+                    targetInfo.Header.Size = (uint)Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>();
+                    targetInfo.Header.AdapterId = dsList[j].AdapterId;
+                    targetInfo.Header.Id = dsList[j].TargetId;
+                    err = CCDImport.DisplayConfigGetDeviceInfo(ref targetInfo);
+                    if (err == WIN32STATUS.ERROR_SUCCESS)
+                    {
+                        SharedLogger.logger.Trace($"WinLibrary/GetSomeDisplayIdentifiers: Successfully got the target info from {dsList[j].TargetId}.");
+                        dsList[j].DevicePath = targetInfo.MonitorDevicePath;
+                    }
+                    else
+                    {
+                        SharedLogger.logger.Warn($"WinLibrary/GetSomeDisplayIdentifiers: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{dsList[j].TargetId}");
+                    }
+                }
+                windowsDisplayConfig.DisplaySources[key] = dsList.ToList();
+            }
+
+
+            Dictionary<string, TaskBarLayout> taskBarStuckRectangles = new Dictionary<string, TaskBarLayout>();
+
             // Now attempt to get the windows taskbar location for each display
-            // We use the information we already got from the display identifiers
-            SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get the Windows Taskbar layout.");
-            List<TaskBarStuckRectangle> taskBarStuckRectangles = TaskBarStuckRectangle.GetCurrent(windowsDisplayConfig.DisplayIdentifiers);
+            taskBarStuckRectangles = TaskBarLayout.GetAllCurrentTaskBarLayouts(windowsDisplayConfig.DisplaySources);
 
             // Now we try to get the taskbar settings too
             SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get the Windows Taskbar settings.");
@@ -1337,21 +1516,66 @@ namespace DisplayMagicianShared.Windows
             }
 
 
+            // NOTE: I have disabled the TaskBar setting logic for now due to errors I cannot fix in this code.
+            // WinLibrary will still track the location of the taskbars, but won't actually set them as the setting of the taskbars doesnt work at the moment.           
+            // I hope to eventually fix this code, but I don't want to hold up a new DisplayMagician release while troubleshooting this.
+            /*
             // Now set the taskbar position for each screen
-            if (displayConfig.TaskBarLayout.Count > 0)
+            if (displayConfig.TaskBarLayout.Count > 0 && allWindowsDisplayConfig.TaskBarLayout.Count > 0)
             {
-                SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Setting the taskbar layout.");
-                if (TaskBarStuckRectangle.Apply(displayConfig.TaskBarLayout))
+                foreach (var tbrDictEntry in displayConfig.TaskBarLayout)
                 {
-                    // TODO - We need to detect if it is Windows 11, as we need to restart explorer.exe for the settings to take
-                    //        No need to do it in Windows 10, as explorere auto-detects the registry key change, and moves the taskbar
-                    //        (In fact, if you try to restart explorer.exe on Win10 it actually stops the taskbar move from working!)
-                    SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Set the taskbar layout successfully.");
+                    // Look up the monitor location of the current monitor and find the matching taskbar location in the taskbar settings
+                    if (allWindowsDisplayConfig.TaskBarLayout.ContainsKey(tbrDictEntry.Key))
+                    {
+                        // check the current monitor taskbar location
+                        // if the current monitor location is the same as the monitor we want to set then
+                        TaskBarLayout currentLayout = displayConfig.TaskBarLayout[tbrDictEntry.Key];
+                        TaskBarLayout wantedLayout = allWindowsDisplayConfig.TaskBarLayout[tbrDictEntry.Key];
+                        if (currentLayout.Equals(wantedLayout))
+                        {
+                            SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Display {tbrDictEntry.Key} ({tbrDictEntry.Value.RegKeyValue}) has the taskbar with the correct position, size and settings, so no need to move it");
+                        }
+                        else
+                        {
+                            // if the current monitor taskbar location is not where we want it then
+                            // move the taskbar manually
+                            TaskBarLayout tbr = tbrDictEntry.Value;
+                            tbr.MoveTaskBar();
+                        }
+                    }
+                    else
+                    {
+                        SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: Display {tbrDictEntry.Key} ({tbrDictEntry.Value.RegKeyValue}) is not currently in use, so cannot set any taskbars on it!");
+                    }
                 }
-                else
+
+                // This will actually move the taskbars by forcing Explorer to read from registry key
+                /*RestartManagerSession.RestartExplorer();
+                Process[] explorers = Process.GetProcessesByName("Explorer");
+                for (int i = 0; i < explorers.Length; i++)
                 {
-                    SharedLogger.logger.Error($"WinLibrary/SetActiveConfig: Unable to set the taskbar layout.");
+                    kill
                 }
+                // Enum all the monitors
+                //List<MONITORINFOEX> currentMonitors = Utils.EnumMonitors();
+                // Go through each monitor
+                //foreach (MONITORINFOEX mi in currentMonitors)
+                //{
+                // Look up the monitor location of the current monitor and find the matching taskbar location in the taskbar settings
+                //if (current)
+                // check the current monitor taskbar location
+                // if the current monitor location is the same as the monitor we want to set then
+                // if the current monitor taskbar location where we want it then
+                // move the taskbar manually
+                // Find the registry key for the monitor we are modifying
+                // save the taskbar position for the monitor in registry
+                // else
+                // log the fact that the monitor is in the right place so skipping moving it
+                // if we didn't find a taskbar location for this monitor
+                // log the fact that the taskbar location wasnt foound for this monitor
+                //}
+
             }
             else
             {
@@ -1378,13 +1602,6 @@ namespace DisplayMagicianShared.Windows
             {
                 // The settings are the same, so we should skip applying them
                 SharedLogger.logger.Trace($"WinLibrary/SetActiveConfig: The current taskbar settings are the same as the one's we want, so skipping setting them!");
-            }
-
-            // Restart Windows Explorer if we are in Win11 and if we need to make any TaskBar changes
-            // If we get here, then we need to restart Windows Explorer for the taskbar registry changes to take effect!
-            /*if (needToRestartExplorer && Utils.IsWindows11())
-            {
-                RestartExplorer();
             }*/
 
             return true;
@@ -1754,6 +1971,7 @@ namespace DisplayMagicianShared.Windows
                     // The AdapterDevicePath is something like "\\?\PCI#VEN_10DE&DEV_2482&SUBSYS_408E1458&REV_A1#4&2283f625&0&0019#{5b45201d-f2f2-4f3b-85bb-30ff1f953599}" if it's a PCI card
                     // or it is something like "\\?\USB#VID_17E9&PID_430C&MI_00#8&d6f23a6&1&0000#{5b45201d-f2f2-4f3b-85bb-30ff1f953599}" if it's a USB card (or USB emulating)
                     // or it is something like "\\?\SuperDisplay#Display#1&3343b12b&0&1234#{5b45201d-f2f2-4f3b-85bb-30ff1f953599}" if it's a SuperDisplay device (allows Android tablet device to be used as directly attached screen)
+                    // or it is something like "\\\\?\\SWD#{1BAAD4AC-CD9D-4207-B4FF-C4F160604B13}#0000#{5b45201d-f2f2-4f3b-85bb-30ff1f953599}" if it is a SpaceDesk Monitor
                     // We only want the vendor ID
                     SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The AdapterDevicePath for this path is :{adapterInfo.AdapterDevicePath}");
                     // Match against the vendor ID
@@ -1772,7 +1990,7 @@ namespace DisplayMagicianShared.Windows
                     }
                     else
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The device is not a USB or PCI card, sp trying to see if it is a SuperDisplay device.");
+                        SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The device is not a USB or PCI card, so trying to see if it is a SuperDisplay device.");
                         string pattern2 = @"SuperDisplay#";
                         Match match2 = Regex.Match(adapterInfo.AdapterDevicePath, pattern2);
                         if (match2.Success)
@@ -1788,10 +2006,26 @@ namespace DisplayMagicianShared.Windows
                         }
                         else
                         {
-                            SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The PCI Vendor ID pattern wasn't matched so we didn't record a vendor ID. AdapterDevicePath = {adapterInfo.AdapterDevicePath}");
+                            SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The device is not a USB, PCI card or a SuperDisplay display, so trying to see if it is a SpaceDesk device.");
+                            string pattern3 = @"SWD#";
+                            Match match3 = Regex.Match(adapterInfo.AdapterDevicePath, pattern3);
+                            if (match3.Success)
+                            {
+                                string pciType = "SWD";
+                                string vendorId = "SWD";
+                                SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The matched PCI Vendor ID is :{vendorId } and the PCI device is a {pciType} device.");
+                                if (!videoCardVendorIds.Contains(vendorId))
+                                {
+                                    videoCardVendorIds.Add(vendorId);
+                                    SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: Stored PCI vendor ID {vendorId} as we haven't already got it");
+                                }
+                            }
+                            else
+                            {
+                                SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: The PCI Vendor ID pattern wasn't matched so we didn't record a vendor ID. AdapterDevicePath = {adapterInfo.AdapterDevicePath}");
+                            }
                         }
                     }
-
                 }
                 catch (Exception ex)
                 {
@@ -1906,7 +2140,118 @@ namespace DisplayMagicianShared.Windows
             {
                 return false;
             }
-        }        
+        }
+
+
+
+        public static bool RepositionMainTaskBar(TaskBarEdge edge)
+        {
+            // Tell Windows to refresh the Main Screen Windows Taskbar
+            // Find the "Shell_TrayWnd" window 
+            IntPtr systemTrayContainerHandle = Utils.FindWindow("Shell_TrayWnd", null);
+            IntPtr startButtonHandle = Utils.FindWindowEx(systemTrayContainerHandle, IntPtr.Zero, "Start", null);
+            IntPtr systemTrayHandle = Utils.FindWindowEx(systemTrayContainerHandle, IntPtr.Zero, "TrayNotifyWnd", null);
+            IntPtr rebarWindowHandle = Utils.FindWindowEx(systemTrayContainerHandle, IntPtr.Zero, "ReBarWindow32", null);
+            IntPtr taskBarPositionBuffer = new IntPtr((Int32)edge);
+            IntPtr trayDesktopShowButtonHandle = Utils.FindWindowEx(systemTrayHandle, IntPtr.Zero, "TrayShowDesktopButtonWClass", null);
+            IntPtr trayInputIndicatorHandle = Utils.FindWindowEx(systemTrayHandle, IntPtr.Zero, "TrayInputIndicatorWClass", null);
+
+            // Send messages
+            // Send the "TrayNotifyWnd" window a WM_USER+13 (0x040D) message with a wParameter of 0x0 and a lParameter of the position (e.g. 0x0000 for left, 0x0001 for top, 0x0002 for right and 0x0003 for bottom)
+            Utils.SendMessage(systemTrayHandle, Utils.WM_USER_13, IntPtr.Zero, taskBarPositionBuffer);
+            Utils.SendMessage(systemTrayHandle, Utils.WM_USER_100, (IntPtr)0x3e, (IntPtr)0x21c);
+            Utils.SendMessage(systemTrayHandle, Utils.WM_THEMECHANGED, (IntPtr)0xffffffffffffffff, (IntPtr)0x000000008000001);
+            // Next, send the "TrayShowDesktopButtonWClass" window a WM_USER+13 (0x040D) message with a wParameter of 0x0 and a lParameter of the position (e.g. 0x0000 for left, 0x0001 for top, 0x0002 for right and 0x0003 for bottom)
+            Utils.SendMessage(trayDesktopShowButtonHandle, Utils.WM_USER_13, IntPtr.Zero, taskBarPositionBuffer);
+            Utils.SendMessage(startButtonHandle, Utils.WM_USER_440, (IntPtr)0x0, (IntPtr)0x0);
+            Utils.SendMessage(systemTrayHandle, Utils.WM_USER_1, (IntPtr)0x0, (IntPtr)0x0);
+            Utils.SendMessage(systemTrayContainerHandle, Utils.WM_SETTINGCHANGE, (IntPtr)Utils.SPI_SETWORKAREA, (IntPtr)Utils.NULL);
+            Utils.PostMessage(systemTrayHandle, Utils.WM_SETTINGCHANGE, Utils.SPI_SETWORKAREA, Utils.NULL);
+            Utils.SendMessage(systemTrayContainerHandle, Utils.WM_SETTINGCHANGE, (IntPtr)Utils.SPI_SETWORKAREA, (IntPtr)Utils.NULL);
+            Utils.SendMessage(rebarWindowHandle, Utils.WM_SETTINGCHANGE, (IntPtr)Utils.SPI_SETWORKAREA, (IntPtr)Utils.NULL);
+            //Utils.SendMessage(trayInputIndicatorHandle, Utils.WM_USER_100, (IntPtr)0x3e, (IntPtr)0x21c);
+            //Utils.SendMessage(systemTrayHandle, Utils.WM_USER_1, (IntPtr)0x0, (IntPtr)0x0);
+            // Move all the taskbars to this location
+            //Utils.SendMessage(systemTrayContainerHandle, Utils.WM_USER_REFRESHTASKBAR, (IntPtr)Utils.wParam_SHELLTRAY, taskBarPositionBuffer);
+            //Utils.SendMessage(systemTrayContainerHandle, Utils.WM_USER_REFRESHTASKBAR, (IntPtr)Utils.wParam_SHELLTRAY, taskBarPositionBuffer);
+            return true;
+        }
+
+        public static bool RepositionAllTaskBars(TaskBarEdge edge)
+        {
+            // Tell Windows to refresh the Main Screen Windows Taskbar
+            // Find the "Shell_TrayWnd" window 
+            IntPtr mainToolBarHWnd = Utils.FindWindow("Shell_TrayWnd", null);
+            // Send the "Shell_TrayWnd" window a WM_USER_REFRESHTASKBAR with a wParameter of 0006 and a lParameter of the position (e.g. 0000 for left, 0001 for top, 0002 for right and 0003 for bottom)
+            IntPtr taskBarPositionBuffer = new IntPtr((Int32)edge);
+            Utils.SendMessage(mainToolBarHWnd, Utils.WM_USER_REFRESHTASKBAR, (IntPtr)Utils.wParam_SHELLTRAY, taskBarPositionBuffer);
+            return true;
+        }
+
+        public static bool RepositionSecondaryTaskBars()
+        {
+            // Tell Windows to refresh the Other Windows Taskbars if needed
+            IntPtr lastTaskBarWindowHwnd = (IntPtr)Utils.NULL;
+            for (int i = 0; i < 100; i++)
+            {
+                // Find the next "Shell_SecondaryTrayWnd" window 
+                IntPtr nextTaskBarWindowHwnd = Utils.FindWindowEx((IntPtr)Utils.NULL, lastTaskBarWindowHwnd, "Shell_SecondaryTrayWnd", null);
+                if (nextTaskBarWindowHwnd == (IntPtr)Utils.NULL)
+                {
+                    // No more windows taskbars to notify
+                    break;
+                }
+                // Send the "Shell_TrayWnd" window a WM_SETTINGCHANGE with a wParameter of SPI_SETWORKAREA
+                Utils.SendMessage(lastTaskBarWindowHwnd, Utils.WM_SETTINGCHANGE, (IntPtr)Utils.SPI_SETWORKAREA, (IntPtr)Utils.NULL);
+                lastTaskBarWindowHwnd = nextTaskBarWindowHwnd;
+            }
+            return true;
+        }
+
+
+
+        public static void RefreshTrayArea()
+        {
+            // Finds the Shell_TrayWnd -> TrayNotifyWnd -> SysPager -> "Notification Area" containing the visible notification area icons (windows 7 version)
+            IntPtr systemTrayContainerHandle = Utils.FindWindow("Shell_TrayWnd", null);
+            IntPtr systemTrayHandle = Utils.FindWindowEx(systemTrayContainerHandle, IntPtr.Zero, "TrayNotifyWnd", null);
+            IntPtr sysPagerHandle = Utils.FindWindowEx(systemTrayHandle, IntPtr.Zero, "SysPager", null);
+            IntPtr notificationAreaHandle = Utils.FindWindowEx(sysPagerHandle, IntPtr.Zero, "ToolbarWindow32", "Notification Area");
+            // If the visible notification area icons (Windows 7 aren't found, then we're on a later version of windows, and we need to look for different window names
+            if (notificationAreaHandle == IntPtr.Zero)
+            {
+                // Finds the Shell_TrayWnd -> TrayNotifyWnd -> SysPager -> "User Promoted Notification Area" containing the visible notification area icons (windows 10+ version)
+                notificationAreaHandle = Utils.FindWindowEx(sysPagerHandle, IntPtr.Zero, "ToolbarWindow32", "User Promoted Notification Area");
+                // Also attempt to find the NotifyIconOverflowWindow -> "Overflow Notification Area' window which is the hidden windoww that notification icons live when they are 
+                // too numberous or are hidden by the user.
+                IntPtr notifyIconOverflowWindowHandle = Utils.FindWindow("NotifyIconOverflowWindow", null);
+                IntPtr overflowNotificationAreaHandle = Utils.FindWindowEx(notifyIconOverflowWindowHandle, IntPtr.Zero, "ToolbarWindow32", "Overflow Notification Area");
+                // Fool the "Overflow Notification Area' window into thinking the mouse is moving over it
+                // which will force windows to refresh the "Overflow Notification Area' window and remove old icons.
+                RefreshTrayArea(overflowNotificationAreaHandle);
+                notifyIconOverflowWindowHandle = IntPtr.Zero;
+                overflowNotificationAreaHandle = IntPtr.Zero;
+            }
+            // Fool the "Notification Area" or "User Promoted Notification Area" window (depends on the version of windows) into thinking the mouse is moving over it
+            // which will force windows to refresh the "Notification Area" or "User Promoted Notification Area" window and remove old icons.
+            RefreshTrayArea(notificationAreaHandle);
+            systemTrayContainerHandle = IntPtr.Zero;
+            systemTrayHandle = IntPtr.Zero;
+            sysPagerHandle = IntPtr.Zero;
+            notificationAreaHandle = IntPtr.Zero;
+
+        }
+
+
+        private static void RefreshTrayArea(IntPtr windowHandle)
+        {
+            // Moves the mouse around within the window area of the supplied window
+            RECT rect;
+            Utils.GetClientRect(windowHandle, out rect);
+            for (var x = 0; x < rect.right; x += 5)
+                for (var y = 0; y < rect.bottom; y += 5)
+                    Utils.SendMessage(windowHandle, Utils.WM_MOUSEMOVE, 0, (y << 16) + x);
+        }
 
     }
 
