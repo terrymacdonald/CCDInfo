@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.7.5");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.7.6");
 
             
-            Console.WriteLine($"\nCCDInfo v1.7.5");
+            Console.WriteLine($"\nCCDInfo v1.7.6");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2022\n");
 
@@ -285,6 +285,10 @@ namespace CCDInfo
                         ObjectCreationHandling = ObjectCreationHandling.Replace
                     });
                     SharedLogger.logger.Trace($"CCDInfo/loadFromFile: Successfully parsed {filename} as JSON.");
+
+                    // We have to patch the adapter IDs after we load a display config because Windows changes them after every reboot :(
+                    WinLibrary.GetLibrary().PatchWindowsDisplayConfig(ref myDisplayConfig);
+                    
                 }
                 catch (Exception ex)
                 {
@@ -357,6 +361,9 @@ namespace CCDInfo
                     SharedLogger.logger.Error(ex, $"CCDInfo/possibleFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
 
+                // We have to patch the adapter IDs after we load a display config because Windows changes them after every reboot :(
+                WinLibrary.GetLibrary().PatchWindowsDisplayConfig(ref myDisplayConfig);
+
                 if (WinLibrary.GetLibrary().IsPossibleConfig(myDisplayConfig))
                 {
                     SharedLogger.logger.Trace($"CCDInfo/possibleFromFile: The display settings in {filename} are able to be applied on this computer if you'd like to apply them.");
@@ -406,6 +413,9 @@ namespace CCDInfo
                 SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to read the JSON file {otherFilename} to memory but File.ReadAllTextthrew an exception.");
             }
 
+            // We have to patch the adapter IDs after we load a display config because Windows changes them after every reboot :(
+            WinLibrary.GetLibrary().PatchWindowsDisplayConfig(ref displayConfig);
+
             if (!string.IsNullOrWhiteSpace(json) && !string.IsNullOrWhiteSpace(otherJson))
             {
                 try
@@ -444,6 +454,10 @@ namespace CCDInfo
                     Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                     SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
+
+                // We have to patch the adapter IDs after we load a display config because Windows changes them after every reboot :(
+                WinLibrary.GetLibrary().PatchWindowsDisplayConfig(ref otherDisplayConfig);
+
 
                 if (displayConfig.Equals(otherDisplayConfig))
                 {
@@ -500,6 +514,10 @@ namespace CCDInfo
                     Console.WriteLine($"CCDInfo/equalFromFile: ERROR - Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                     SharedLogger.logger.Error(ex, $"CCDInfo/equalFromFile: Tried to parse the JSON in the {filename} but the JsonConvert threw an exception.");
                 }
+
+                // We have to patch the adapter IDs after we load a display config because Windows changes them after every reboot :(
+                WinLibrary.GetLibrary().PatchWindowsDisplayConfig(ref otherDisplayConfig);
+
                 if (displayConfig.Equals(otherDisplayConfig))
                 {
                     SharedLogger.logger.Trace($"CCDInfo/equalFromFile: The Windows display settings in {filename} and the currently active display configuration are equal.");
