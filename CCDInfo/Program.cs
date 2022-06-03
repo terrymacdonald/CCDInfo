@@ -45,10 +45,10 @@ namespace CCDInfo
             NLog.LogManager.Configuration = config;
             
             // Start the Log file
-            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.7.8");
+            SharedLogger.logger.Info($"CCDInfo/Main: Starting CCDInfo v1.7.9");
 
             
-            Console.WriteLine($"\nCCDInfo v1.7.8");
+            Console.WriteLine($"\nCCDInfo v1.7.9");
             Console.WriteLine($"==============");
             Console.WriteLine($"By Terry MacDonald 2022\n");
 
