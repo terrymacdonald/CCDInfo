@@ -254,7 +254,7 @@ namespace DisplayMagicianShared.Windows
         {
 
             Dictionary<ulong, ulong> adapterOldToNewMap = new Dictionary<ulong, ulong>();
-            Dictionary<ulong, string> currentAdapterMap = GetCurrentAdapterIDs();
+            Dictionary<ulong, string> currentAdapterMap = GetAllAdapterIDs();
             try
             {
                 SharedLogger.logger.Trace("WinLibrary/PatchWindowsDisplayConfig: Going through the list of adapters we stored in the config to figure out the old adapterIDs");
@@ -668,7 +668,7 @@ namespace DisplayMagicianShared.Windows
                     paths[i].TargetInfo.ModeInfoIdx = CCDImport.DISPLAYCONFIG_PATH_MODE_IDX_INVALID;
                 }
 
-                // Get adapter ID for later
+                /*// Get adapter ID for later
                 SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Attempting to get adapter name for adapter {paths[i].TargetInfo.AdapterId.Value}.");
                 if (!windowsDisplayConfig.DisplayAdapters.ContainsKey(paths[i].TargetInfo.AdapterId.Value))
                 {
@@ -695,7 +695,7 @@ namespace DisplayMagicianShared.Windows
                     // We already have the adapter name
                     SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: We already have the adapter name {windowsDisplayConfig.DisplayAdapters[paths[i].TargetInfo.AdapterId.Value]} for adapter {paths[i].TargetInfo.AdapterId.Value} so skipping storing it.");
                     //gotAdapterName = true;
-                }
+                }*/
 
 
                 // Get advanced color info
@@ -774,6 +774,9 @@ namespace DisplayMagicianShared.Windows
                 }
             }
 
+            // Get all the DisplayAdapters currently in the system
+            // This will be used for windows to translate the adapter details beween reboots
+            windowsDisplayConfig.DisplayAdapters = GetAllAdapterIDs();
 
             // Go through the list of physicalTargetIdsAvailable
             // ignore the ones that were found
@@ -2132,7 +2135,7 @@ namespace DisplayMagicianShared.Windows
             return displayIdentifiers;
         }
 
-        public List<string> GetCurrentPCIVideoCardVendors()
+        public List<string> GetAllPCIVideoCardVendors()
         {
             SharedLogger.logger.Trace($"WinLibrary/GetCurrentPCIVideoCardVendors: Getting the current PCI vendor ids for the videocards reported to Windows");
             List<string> videoCardVendorIds = new List<string>();
@@ -2283,56 +2286,56 @@ namespace DisplayMagicianShared.Windows
 
         }
 
-        public Dictionary<ulong, string> GetCurrentAdapterIDs()
+        public Dictionary<ulong, string> GetAllAdapterIDs()
         {
-            SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Getting the current adapter ids for the videocards Windows knows about");
+            SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Getting the current adapter ids for the videocards Windows knows about");
             Dictionary<ulong, string> currentAdapterMap = new Dictionary<ulong, string>();
 
-            SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Testing whether the display configuration is valid (allowing tweaks).");
+            SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Testing whether the display configuration is valid (allowing tweaks).");
             // Get the size of the largest All Paths and Modes arrays
             int pathCount = 0;
             int modeCount = 0;
             WIN32STATUS err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ALL_PATHS, out pathCount, out modeCount);
             if (err != WIN32STATUS.ERROR_SUCCESS)
             {
-                SharedLogger.logger.Error($"WinLibrary/GetCurrentAdapterIDs: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
-                throw new WinLibraryException($"GetCurrentAdapterIDs returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                SharedLogger.logger.Error($"WinLibrary/GetAllAdapterIDs: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
+                throw new WinLibraryException($"GetAllAdapterIDs returned WIN32STATUS {err} when trying to get the maximum path and mode sizes");
             }
 
-            SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Getting the current Display Config path and mode arrays");
+            SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Getting the current Display Config path and mode arrays");
             var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
             err = CCDImport.QueryDisplayConfig(QDC.QDC_ALL_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
             if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
             {
-                SharedLogger.logger.Warn($"WinLibrary/GetCurrentAdapterIDs: The displays were modified between GetDisplayConfigBufferSizes and QueryDisplayConfig so we need to get the buffer sizes again.");
-                SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Getting the size of the largest Active Paths and Modes arrays");
+                SharedLogger.logger.Warn($"WinLibrary/GetAllAdapterIDs: The displays were modified between GetDisplayConfigBufferSizes and QueryDisplayConfig so we need to get the buffer sizes again.");
+                SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Getting the size of the largest Active Paths and Modes arrays");
                 // Screen changed in between GetDisplayConfigBufferSizes and QueryDisplayConfig, so we need to get buffer sizes again
                 // as per https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-querydisplayconfig 
                 err = CCDImport.GetDisplayConfigBufferSizes(QDC.QDC_ALL_PATHS, out pathCount, out modeCount);
                 if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Error($"WinLibrary/GetCurrentAdapterIDs: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes again");
+                    SharedLogger.logger.Error($"WinLibrary/GetAllAdapterIDs: ERROR - GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes again");
                     throw new WinLibraryException($"GetDisplayConfigBufferSizes returned WIN32STATUS {err} when trying to get the maximum path and mode sizes again");
                 }
-                SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Getting the current Display Config path and mode arrays");
+                SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Getting the current Display Config path and mode arrays");
                 paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
                 modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
                 err = CCDImport.QueryDisplayConfig(QDC.QDC_ALL_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
                 if (err == WIN32STATUS.ERROR_INSUFFICIENT_BUFFER)
                 {
-                    SharedLogger.logger.Error($"WinLibrary/GetCurrentAdapterIDs: ERROR - The displays were still modified between GetDisplayConfigBufferSizes and QueryDisplayConfig, even though we tried twice. Something is wrong.");
+                    SharedLogger.logger.Error($"WinLibrary/GetAllAdapterIDs: ERROR - The displays were still modified between GetDisplayConfigBufferSizes and QueryDisplayConfig, even though we tried twice. Something is wrong.");
                     throw new WinLibraryException($"The displays were still modified between GetDisplayConfigBufferSizes and QueryDisplayConfig, even though we tried twice. Something is wrong.");
                 }
                 else if (err != WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Error($"WinLibrary/GetCurrentAdapterIDs: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays again");
+                    SharedLogger.logger.Error($"WinLibrary/GetAllAdapterIDs: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays again");
                     throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays again.");
                 }
             }
             else if (err != WIN32STATUS.ERROR_SUCCESS)
             {
-                SharedLogger.logger.Error($"WinLibrary/GetCurrentAdapterIDs: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
+                SharedLogger.logger.Error($"WinLibrary/GetAllAdapterIDs: ERROR - QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays");
                 throw new WinLibraryException($"QueryDisplayConfig returned WIN32STATUS {err} when trying to query all available displays.");
             }
 
@@ -2341,7 +2344,7 @@ namespace DisplayMagicianShared.Windows
                 if (path.TargetInfo.TargetAvailable == false)
                 {
                     // We want to skip this one cause it's not valid
-                    SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Skipping path due to TargetAvailable not existing in display #{path.TargetInfo.Id}");
+                    SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Skipping path due to TargetAvailable not existing in display #{path.TargetInfo.Id}");
                     continue;
                 }
 
@@ -2354,12 +2357,12 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref adapterInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Trace($"WinLibrary/GetCurrentAdapterIDs: Successfully got the display name info from {path.TargetInfo.Id}.");
+                    SharedLogger.logger.Trace($"WinLibrary/GetAllAdapterIDs: Successfully got the display name info from {path.TargetInfo.Id}.");
                     currentAdapterMap[path.TargetInfo.AdapterId.Value] = adapterInfo.AdapterDevicePath;
                 }
                 else
                 {
-                    SharedLogger.logger.Warn($"WinLibrary/GetCurrentAdapterIDs: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{path.TargetInfo.Id}");
+                    SharedLogger.logger.Warn($"WinLibrary/GetAllAdapterIDs: WARNING - DisplayConfigGetDeviceInfo returned WIN32STATUS {err} when trying to get the target info for display #{path.TargetInfo.Id}");
                 }
 
             }
