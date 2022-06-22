@@ -621,36 +621,47 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-
-                    //gotSourceDeviceName = true;
-                    // Store it for later
-                    if (windowsDisplayConfig.DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
+                    // If the GDI Device name is not in the \\.\DISPLAYXXXX format, then skip it
+                    // This is needed to avoid processing the WinDisc Lockscreen view
+                    string pattern = @"\\\\.\\DISPLAY[\d]+";
+                    Match match = Regex.Match(sourceInfo.ViewGdiDeviceName, pattern);
+                    if (match.Success)
                     {
-                        // We already have at least one display using this source, so we need to add the other cloned display to the existing list
-                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
-                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
-                        ds.SourceId = paths[i].SourceInfo.Id;
-                        ds.TargetId = paths[i].TargetInfo.Id;
-                        ds.SourceDpiScalingRel = sourceDpiScalingRel;
-                        windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(ds);
-                        isClonedPath = true;
-                        isClonedProfile = true;
-                        windowsDisplayConfig.IsCloned = true;
+                        // gotSourceDeviceName = true;
+                        // Store it for later
+                        if (windowsDisplayConfig.DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
+                        {
+                            // We already have at least one display using this source, so we need to add the other cloned display to the existing list
+                            DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                            ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                            ds.SourceId = paths[i].SourceInfo.Id;
+                            ds.TargetId = paths[i].TargetInfo.Id;
+                            ds.SourceDpiScalingRel = sourceDpiScalingRel;
+                            windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(ds);
+                            isClonedPath = true;
+                            isClonedProfile = true;
+                            windowsDisplayConfig.IsCloned = true;
+                        }
+                        else
+                        {
+                            // This is the first display to use this source
+                            List<DISPLAY_SOURCE> sources = new List<DISPLAY_SOURCE>();
+                            DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                            ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                            ds.SourceId = paths[i].SourceInfo.Id;
+                            ds.TargetId = paths[i].TargetInfo.Id;
+                            ds.SourceDpiScalingRel = sourceDpiScalingRel;
+                            sources.Add(ds);
+                            windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sources);
+                        }
+
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id}.");
                     }
                     else
                     {
-                        // This is the first display to use this source
-                        List<DISPLAY_SOURCE> sources = new List<DISPLAY_SOURCE>();
-                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
-                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
-                        ds.SourceId = paths[i].SourceInfo.Id;
-                        ds.TargetId = paths[i].TargetInfo.Id;
-                        ds.SourceDpiScalingRel = sourceDpiScalingRel;
-                        sources.Add(ds);
-                        windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sources);
+                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipped Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id} as it wasn't in the \\\\.\\DISPLAYXX format");
                     }
-
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id}.");
+                    
                 }
                 else
                 {
@@ -888,7 +899,7 @@ namespace DisplayMagicianShared.Windows
                 for (int count = 1; count <= 4; count++)
                 {
                     SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: We were unable to get all the Windows Taskbar Layouts! So we need to try again. Attempt {count} of 4.");
-                    
+
                     // Wait 5 seconds
                     System.Threading.Thread.Sleep(5000);
                     // then try again
@@ -1036,20 +1047,32 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    // Store it for later
-                    //DisplaySources.Add(sourceInfo.ViewGdiDeviceName, path.SourceInfo.Id);
-                    if (DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
+
+                    // If the GDI Device name is not in the \\.\DISPLAYXXXX format, then skip it
+                    // This is needed to avoid processing the WinDisc Lockscreen view and potentially other display sources
+                    string pattern = @"\\\\.\\DISPLAY[\d]+";
+                    Match match = Regex.Match(sourceInfo.ViewGdiDeviceName, pattern);
+                    if (match.Success)
                     {
-                        // We want to add another cloned display
-                        DisplaySources[sourceInfo.ViewGdiDeviceName].Add(path.SourceInfo.Id);
+                        // Store it for later
+                        //DisplaySources.Add(sourceInfo.ViewGdiDeviceName, path.SourceInfo.Id);
+                        if (DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
+                        {
+                            // We want to add another cloned display
+                            DisplaySources[sourceInfo.ViewGdiDeviceName].Add(path.SourceInfo.Id);
+                        }
+                        else
+                        {
+                            // We want to create a new list entry if there isn't one already there.
+                            DisplaySources.Add(sourceInfo.ViewGdiDeviceName, new List<uint> { path.SourceInfo.Id });
+                        }
+
+                        SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id}.");
                     }
                     else
                     {
-                        // We want to create a new list entry if there isn't one already there.
-                        DisplaySources.Add(sourceInfo.ViewGdiDeviceName, new List<uint> { path.SourceInfo.Id });
+                        SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Skipped Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id} as it wasn't in the \\\\.\\DISPLAYXX format");
                     }
-
-                    SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id}.");
                 }
                 else
                 {
