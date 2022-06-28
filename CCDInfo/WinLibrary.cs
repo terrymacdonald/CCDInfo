@@ -169,6 +169,10 @@ namespace DisplayMagicianShared.Windows
 
             SharedLogger.logger.Trace("WinLibrary/WinLibrary: Intialising Windows CCD library interface");
             _initialised = true;
+
+            // Set the DPI awareness for the process this thread is running within so that the DPI calls return the right values at the right times
+            CCDImport.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED);
+
             _activeDisplayConfig = GetActiveConfig();
             _allConnectedDisplayIdentifiers = GetAllConnectedDisplayIdentifiers();
         }
@@ -564,9 +568,13 @@ namespace DisplayMagicianShared.Windows
                 }
             }
 
-            // Now cycle through the paths and grab the HDR state information
+            // Now cycle through the paths and grab the state information we need
             // and map the adapter name to adapter id
             // and populate the display source information
+
+            // Set the DPI awareness for the process this thread is running within so that the DPI calls return the right values
+            CCDImport.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
             List<uint> targetPathIdsToChange = new List<uint>();
             List<uint> targetModeIdsToChange = new List<uint>();
             List<uint> targetIdsFound = new List<uint>();
@@ -574,6 +582,19 @@ namespace DisplayMagicianShared.Windows
             bool isClonedProfile = false;
             for (int i = 0; i < paths.Length; i++)
             {
+
+                if (selector == QDC.QDC_ONLY_ACTIVE_PATHS && paths[i].TargetInfo.TargetInUse == false)
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipping display target {paths[i].TargetInfo.Id} as we only want displays currently in use");
+                    continue;
+                }
+
+                if (selector == QDC.QDC_ALL_PATHS && paths[i].TargetInfo.TargetAvailable == false)
+                {
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipping display target {paths[i].TargetInfo.Id} as we want all available displays and this one isn't available");
+                    continue;
+                }
+
                 //bool gotSourceDeviceName = false;
                 //bool gotAdapterName = false;
                 bool gotAdvancedColorInfo = false;
@@ -603,12 +624,13 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref displayScalingInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found DPI value for source {paths[i].SourceInfo.Id} is {CCDImport.DPI_VALUES[displayScalingInfo.CurrrentScaleRel]}%.");
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Windows DPI scasling value for source {paths[i].SourceInfo.Id} is {displayScalingInfo.CurrrentScaleRel}.");
                     sourceDpiScalingRel = displayScalingInfo.CurrrentScaleRel;
+
                 }
                 else
                 {
-                    SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get advanced color settings for display {paths[i].TargetInfo.Id}.");
+                    SharedLogger.logger.Warn($"WinLibrary/GetWindowsDisplayConfig: WARNING - Unabled to get Windows DPI Scaling value for display {paths[i].TargetInfo.Id}.");
                 }
 
 
@@ -621,47 +643,36 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    // If the GDI Device name is not in the \\.\DISPLAYXXXX format, then skip it
-                    // This is needed to avoid processing the WinDisc Lockscreen view
-                    string pattern = @"\\\\.\\DISPLAY[\d]+";
-                    Match match = Regex.Match(sourceInfo.ViewGdiDeviceName, pattern);
-                    if (match.Success)
-                    {
-                        // gotSourceDeviceName = true;
-                        // Store it for later
-                        if (windowsDisplayConfig.DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
-                        {
-                            // We already have at least one display using this source, so we need to add the other cloned display to the existing list
-                            DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
-                            ds.AdapterId = paths[i].SourceInfo.AdapterId;
-                            ds.SourceId = paths[i].SourceInfo.Id;
-                            ds.TargetId = paths[i].TargetInfo.Id;
-                            ds.SourceDpiScalingRel = sourceDpiScalingRel;
-                            windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(ds);
-                            isClonedPath = true;
-                            isClonedProfile = true;
-                            windowsDisplayConfig.IsCloned = true;
-                        }
-                        else
-                        {
-                            // This is the first display to use this source
-                            List<DISPLAY_SOURCE> sources = new List<DISPLAY_SOURCE>();
-                            DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
-                            ds.AdapterId = paths[i].SourceInfo.AdapterId;
-                            ds.SourceId = paths[i].SourceInfo.Id;
-                            ds.TargetId = paths[i].TargetInfo.Id;
-                            ds.SourceDpiScalingRel = sourceDpiScalingRel;
-                            sources.Add(ds);
-                            windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sources);
-                        }
 
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id}.");
+                    //gotSourceDeviceName = true;
+                    // Store it for later
+                    if (windowsDisplayConfig.DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
+                    {
+                        // We already have at least one display using this source, so we need to add the other cloned display to the existing list
+                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                        ds.SourceId = paths[i].SourceInfo.Id;
+                        ds.TargetId = paths[i].TargetInfo.Id;
+                        ds.SourceDpiScalingRel = sourceDpiScalingRel;
+                        windowsDisplayConfig.DisplaySources[sourceInfo.ViewGdiDeviceName].Add(ds);
+                        isClonedPath = true;
+                        isClonedProfile = true;
+                        windowsDisplayConfig.IsCloned = true;
                     }
                     else
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipped Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id} as it wasn't in the \\\\.\\DISPLAYXX format");
+                        // This is the first display to use this source
+                        List<DISPLAY_SOURCE> sources = new List<DISPLAY_SOURCE>();
+                        DISPLAY_SOURCE ds = new DISPLAY_SOURCE();
+                        ds.AdapterId = paths[i].SourceInfo.AdapterId;
+                        ds.SourceId = paths[i].SourceInfo.Id;
+                        ds.TargetId = paths[i].TargetInfo.Id;
+                        ds.SourceDpiScalingRel = sourceDpiScalingRel;
+                        sources.Add(ds);
+                        windowsDisplayConfig.DisplaySources.Add(sourceInfo.ViewGdiDeviceName, sources);
                     }
-                    
+
+                    SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {paths[i].SourceInfo.Id}.");
                 }
                 else
                 {
@@ -784,6 +795,9 @@ namespace DisplayMagicianShared.Windows
                     SharedLogger.logger.Trace($"WinLibrary/GetWindowsDisplayConfig: Skipping getting HDR and SDR White levels information as display {paths[i].TargetInfo.Id} uses a {paths[i].TargetInfo.OutputTechnology} connector that doesn't support HDR.");
                 }
             }
+
+            // Set the DPI awareness for the process this thread is running within so that the DPI calls return the right values
+            CCDImport.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED);
 
             // Get all the DisplayAdapters currently in the system
             // This will be used for windows to translate the adapter details beween reboots
@@ -1047,32 +1061,20 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigGetDeviceInfo(ref sourceInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-
-                    // If the GDI Device name is not in the \\.\DISPLAYXXXX format, then skip it
-                    // This is needed to avoid processing the WinDisc Lockscreen view and potentially other display sources
-                    string pattern = @"\\\\.\\DISPLAY[\d]+";
-                    Match match = Regex.Match(sourceInfo.ViewGdiDeviceName, pattern);
-                    if (match.Success)
+                    // Store it for later
+                    //DisplaySources.Add(sourceInfo.ViewGdiDeviceName, path.SourceInfo.Id);
+                    if (DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
                     {
-                        // Store it for later
-                        //DisplaySources.Add(sourceInfo.ViewGdiDeviceName, path.SourceInfo.Id);
-                        if (DisplaySources.ContainsKey(sourceInfo.ViewGdiDeviceName))
-                        {
-                            // We want to add another cloned display
-                            DisplaySources[sourceInfo.ViewGdiDeviceName].Add(path.SourceInfo.Id);
-                        }
-                        else
-                        {
-                            // We want to create a new list entry if there isn't one already there.
-                            DisplaySources.Add(sourceInfo.ViewGdiDeviceName, new List<uint> { path.SourceInfo.Id });
-                        }
-
-                        SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id}.");
+                        // We want to add another cloned display
+                        DisplaySources[sourceInfo.ViewGdiDeviceName].Add(path.SourceInfo.Id);
                     }
                     else
                     {
-                        SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Skipped Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id} as it wasn't in the \\\\.\\DISPLAYXX format");
+                        // We want to create a new list entry if there isn't one already there.
+                        DisplaySources.Add(sourceInfo.ViewGdiDeviceName, new List<uint> { path.SourceInfo.Id });
                     }
+
+                    SharedLogger.logger.Trace($"WinLibrary/GetDisplaySourceNames: Found Display Source {sourceInfo.ViewGdiDeviceName} for source {path.SourceInfo.Id}.");
                 }
                 else
                 {
@@ -1533,6 +1535,7 @@ namespace DisplayMagicianShared.Windows
             System.Threading.Thread.Sleep(100);
 
             SharedLogger.logger.Trace($"WinLibrary/SetWindowsDisplayConfig: Attempting to set Windows DPI Scaling setting for display sources.");
+            CCDImport.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             foreach (var displaySourceEntry in displayConfig.DisplaySources)
             {
                 // We only need to set the source on the first display source
@@ -1546,13 +1549,14 @@ namespace DisplayMagicianShared.Windows
                 err = CCDImport.DisplayConfigSetDeviceInfo(ref displayScalingInfo);
                 if (err == WIN32STATUS.ERROR_SUCCESS)
                 {
-                    SharedLogger.logger.Trace($"WinLibrary/SetWindowsDisplayConfig: Setting DPI value for source {displaySourceEntry.Value[0].SourceId} to {CCDImport.DPI_VALUES[displayScalingInfo.ScaleRel]}%.");
+                    SharedLogger.logger.Trace($"WinLibrary/SetWindowsDisplayConfig: Setting DPI value for source {displaySourceEntry.Value[0].SourceId} to {displayScalingInfo.ScaleRel}.");
                 }
                 else
                 {
-                    SharedLogger.logger.Warn($"WinLibrary/SetWindowsDisplayConfig: WARNING - Unable to set DPI value for source {displaySourceEntry.Value[0].SourceId} to {CCDImport.DPI_VALUES[displayScalingInfo.ScaleRel]}%.");
+                    SharedLogger.logger.Warn($"WinLibrary/SetWindowsDisplayConfig: WARNING - Unable to set DPI value for source {displaySourceEntry.Value[0].SourceId} to {displayScalingInfo.ScaleRel}.");
                 }
             }
+            CCDImport.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED);
 
 
             // NOTE: There is currently no way within Windows CCD API to set the HDR settings to any particular setting
